@@ -178,6 +178,51 @@ Pager* pager_open(const char* filename) {
     return pager;
 }
 
+/*
+ *node utility functions
+ */
+
+void set_node_type(void* node, NodeType type) {
+    uint8_t value = type;
+    *((uint8_t*)(node + NODE_TYPE_OFFSET)) = value;
+}
+void set_node_root(void* node, bool is_root) {
+    uint8_t value = is_root;
+    *((uint8_t*)(node + IS_ROOT_OFFSET)) = value;
+bool is_node_root(void* node) {
+    uint8_t value = *((uint8_t*)(node + IS_ROOT_OFFSET));
+    return (bool)value;
+}
+uint32_t* internal_node_num_keys(void* node) {
+    return node + INTERNAL_NODE_NUM_KEYS_OFFSET;
+}
+uint32_t* leaf_node_num_cells(void* node) {
+    return node + LEAF_NODE_NUM_CELLS_OFFSET;
+}
+uint32_t* leaf_node_next_leaf(void* node) {
+    return node + LEAF_NODE_NEXT_LEAF_OFFSET;
+}
+uint32_t* leaf_node_cell(void* node, uint32_t cell_num) {
+    return node + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE;
+}
+uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
+    return leaf_node_cell(node, cell_num);
+}
+uint32_t* leaf_node_value(void* node, uint32_t cell_num) {
+    return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
+}
+void initialize_internal_node(void* node) {
+    set_node_type(node, NODE_INTERNAL);
+    set_node_root(node, false);
+    *internal_node_num_keys(node) = 0;
+}
+void initialize_leaf_node(void* node) {
+    set_node_type(node, NODE_LEAF);
+    set_node_root(node, false);
+    *leaf_node_num_cells(node) = 0;
+    *leaf_node_next_leaf(node) = 0;
+}
+
 void open_file(const char* filename) { /* open file */
     Pager* pager = pager_open(filename);
 
