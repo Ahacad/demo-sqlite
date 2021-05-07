@@ -77,29 +77,6 @@ InputResult read_input() {
     return INPUT_SUCCESS;
 }
 
-Pager* pager_open(const char* filename) {
-    int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
-    if (fd == -1) {
-        // FIXME: handle open failure
-    }
-    off_t file_length = lseek(fd, 0, SEEK_END);
-
-    Pager* pager = malloc(sizeof(Pager));
-    pager->file_descriptor = fd;
-    pager->file_length = file_length;
-    pager->pages_num = (file_length / PAGE_SIZE);
-
-    if (file_length % PAGE_SIZE != 0) {
-        // FIXME: handle corrupt file
-    }
-
-    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-        pager->pages[i] = NULL;
-    }
-
-    return pager;
-}
-
 void* get_page(Pager* pager, uint32_t page_num) {
     if (page_num > TABLE_MAX_PAGES) {
         // FIXME: handle more pages than boundary
@@ -123,10 +100,37 @@ void* get_page(Pager* pager, uint32_t page_num) {
             pager->num_pages = page_num + 1;
         }
     }
+    return pager->pages[page_num];
+}
+
+Pager* pager_open(const char* filename) {
+    int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+    if (fd == -1) {
+        // FIXME: handle open failure
+    }
+    off_t file_length = lseek(fd, 0, SEEK_END);
+
+    Pager* pager = malloc(sizeof(Pager));
+    pager->file_descriptor = fd;
+    pager->file_length = file_length;
+    pager->num_pages = (file_length / PAGE_SIZE);
+
+    if (file_length % PAGE_SIZE != 0) {
+        // FIXME: handle corrupt file
+    }
+
+    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+        // initialize all pages to null
+        pager->pages[i] = NULL;
+    }
+
+    return pager;
 }
 
 void open_file(const char* filename) { /* open file */
     Pager* pager = pager_open(filename);
+
+    // table is already defined globally
     table.pager = pager;
     table.root_page_num = 0;
 
