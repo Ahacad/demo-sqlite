@@ -45,6 +45,12 @@ typedef struct {
 Table table;
 
 /*
+ *functions declartions
+ */
+Cursor* leaf_node_find(uint32_t page_num, uint32_t key);
+// TODO: move all definitions here to give autocompletion
+
+/*
  *nodes
  */
 
@@ -183,6 +189,10 @@ Pager* pager_open(const char* filename) {
  *node utility functions
  */
 
+NodeType get_node_type(void* node) {
+    uint8_t value = *((uint8_t*)(node + NODE_TYPE_OFFSET));
+    return (NodeType)value;
+}
 void set_node_type(void* node, NodeType type) {
     uint8_t value = type;
     *((uint8_t*)(node + NODE_TYPE_OFFSET)) = value;
@@ -195,9 +205,33 @@ bool is_node_root(void* node) {
     uint8_t value = *((uint8_t*)(node + IS_ROOT_OFFSET));
     return (bool)value;
 }
+// return pointer to a cell in internal node
+uint32_t* internal_node_cell(void* node, uint32_t cell_num) {
+    return node + INTERNAL_NODE_HEADER_SIZE +
+           cell_num * INTERNAL_NODE_CELL_SIZE;
+}
+uint32_t* internal_node_key(void* node, uint32_t key_num) {
+    return (void*)internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE;
+}
+// return pointer to right child in internal node
+uint32_t* internal_node_right_child(void* node) {
+    return node + INTERNAL_NODE_RIGHT_CHILD_OFFSET;
+}
+// get pointer to number of keys for internal node
 uint32_t* internal_node_num_keys(void* node) {
     return node + INTERNAL_NODE_NUM_KEYS_OFFSET;
 }
+uint32_t* internal_node_child(void* node, uint32_t child_num) {
+    uint32_t num_keys = *internal_node_num_keys(node);
+    if (child_num > num_keys) {
+        // FIXME: handle more child than keys
+    } else if (child_num == num_keys) {
+        return internal_node_right_child(node);
+    } else {
+        return internal_node_cell(node, child_num);
+    }
+}
+//
 uint32_t* leaf_node_num_cells(void* node) {
     return node + LEAF_NODE_NUM_CELLS_OFFSET;
 }
@@ -278,7 +312,38 @@ void b_tree_search() {
     printf("[INFO] select: %s\n", statement.row.b);
 }
 
+// return index of the child which should contain the key
+uint32_t internal_node_find_child(void* node, uint32_t key) {
+    uint32_t num_keys = *internal_node_num_keys(node);
+
+    // binary search to find left boundary
+    uint32_t left = 0, right = num_keys, mid, key_to_right;
+    while (left < right) {
+        mid = left + ((right - left) >> 2);
+        key_to_right = *internal_node_key(node, mid);
+        if (key_to_right >= mid) {
+            right = mid;
+        } else {
+            left = mid + 1;
+        }
+    }
+    return left;
+}
+Cursor* internal_node_find(uint32_t page_num, uint32_t key) {
+    void* node = get_page(table.pager, page_num);
+
+    uint32_t child_index = internal_node_find_child(node, key);
+    uint32_t child_num = *internal_node_child(node, child_index);
+    void* child = get_page(table.pager, child_num);
+    switch (get_node_type(child)) {
+        case NODE_LEAF:
+            return leaf_node_find(child_num, key);
+        case NODE_INTERNAL:
+            return internal_node_find(child_num, key);
+    }
+}
 Cursor* leaf_node_find(uint32_t page_num, uint32_t key) {
+    // find key on leaf node
     void* node = get_page(table.pager, page_num);
     uint32_t num_cells = *leaf_node_num_cells(node);
 
@@ -319,9 +384,15 @@ void b_tree_insert() {
     /* insert a row */
     printf("[INFO] insert: ");
     print_row(&statement.row);
+
     Row row_to_insert = statement.row;
     uint32_t key_to_insert = row_to_insert.a;
     Cursor* cursor = table_find(key_to_insert);
+
+    void* node = get_page(table.pager, cursor->page_num);
+    uint32_t num_cells = *leaf_node_num_cells(node);
+
+    // TODO
 }
 
 /* the key to delete is stored in `statement.row.b` */
