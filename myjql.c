@@ -17,6 +17,7 @@
 const uint32_t PAGE_SIZE = 4096;
 // FIXME: test whether 500 is enough
 
+// the table struct specified in the PJ
 typedef struct {
     uint32_t a;
     char b[COLUMN_B_SIZE + 1];
@@ -25,7 +26,7 @@ typedef struct {
 typedef struct {
     int file_descriptor;
     uint32_t file_length;
-    uint32_t pages_num;
+    uint32_t num_pages;
     void* pages[TABLE_MAX_PAGES];
 } Pager;
 
@@ -99,14 +100,42 @@ Pager* pager_open(const char* filename) {
     return pager;
 }
 
+void* get_page(Pager* pager, uint32_t page_num) {
+    if (page_num > TABLE_MAX_PAGES) {
+        // FIXME: handle more pages than boundary
+    }
+    // if no cache, read from disk
+    if (pager->pages[page_num] == NULL) {
+        void* page = malloc(PAGE_SIZE);
+        uint32_t num_pages = pager->file_length / PAGE_SIZE;
+        if (pager->file_length % PAGE_SIZE) {
+            num_pages += 1;
+        }
+        if (page_num <= num_pages) {
+            lseek(pager->file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
+            ssize_t bytes_read = read(pager->file_descriptor, page, PAGE_SIZE);
+            if (bytes_read == -1) {
+                // FIXME: handle reading failure
+            }
+        }
+        pager->pages[page_num] = page;
+        if (page_num >= pager->num_pages) {
+            pager->num_pages = page_num + 1;
+        }
+    }
+}
+
 void open_file(const char* filename) { /* open file */
     Pager* pager = pager_open(filename);
     table.pager = pager;
     table.root_page_num = 0;
 
-    if (pager->pages_num == 0) {
+    if (pager->num_pages == 0) {
         // new table
-        // TODO
+        // TODO: new table
+        /*void* root_node = get_page(pager,0);*/
+        /*initialize_leaf_node(root_node);*/
+        /*set_onde_root(root_node, true);*/
     }
 }
 
