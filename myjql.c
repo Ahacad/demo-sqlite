@@ -3,12 +3,45 @@
 /* Test: /usr/bin/time -v ./myjql myjql.db < in.txt > out.txt */
 /* Compare: diff out.txt ans.txt */
 
+#include <fcntl.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+
+#define COLUMN_B_SIZE 11
+#define TABLE_MAX_PAGES 500
+const uint32_t PAGE_SIZE = 4096;
+// FIXME: test whether 500 is enough
+
+typedef struct {
+    uint32_t a;
+    char b[COLUMN_B_SIZE + 1];
+} Row;
+
+typedef struct {
+    int file_descriptor;
+    uint32_t file_length;
+    uint32_t pages_num;
+    void* pages[TABLE_MAX_PAGES];
+} Pager;
+
+typedef struct {
+    Pager* pager;
+    uint32_t root_page_num;
+} Table;
+
+typedef struct {
+    Table* table;
+    uint32_t page_num;
+    uint32_t cell_num;
+    bool is_end_of_table;
+} Cursor;
+
+Table table;
 
 /* shell IO */
 
@@ -43,7 +76,38 @@ InputResult read_input() {
     return INPUT_SUCCESS;
 }
 
+Pager* pager_open(const char* filename) {
+    int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
+    if (fd == -1) {
+        // FIXME: handle open failure
+    }
+    off_t file_length = lseek(fd, 0, SEEK_END);
+
+    Pager* pager = malloc(sizeof(Pager));
+    pager->file_descriptor = fd;
+    pager->file_length = file_length;
+    pager->pages_num = (file_length / PAGE_SIZE);
+
+    if (file_length % PAGE_SIZE != 0) {
+        // FIXME: handle corrupt file
+    }
+
+    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+        pager->pages[i] = NULL;
+    }
+
+    return pager;
+}
+
 void open_file(const char* filename) { /* open file */
+    Pager* pager = pager_open(filename);
+    table.pager = pager;
+    table.root_page_num = 0;
+
+    if (pager->pages_num == 0) {
+        // new table
+        // TODO
+    }
 }
 
 void exit_nicely(int code) {
@@ -57,34 +121,6 @@ void exit_success() {
 }
 
 /* specialization of data structure */
-
-#define COLUMN_B_SIZE 11
-#define TABLE_MAX_PAGES 500
-// FIXME: test whether 500 is enough
-
-typedef struct {
-    uint32_t a;
-    char b[COLUMN_B_SIZE + 1];
-} Row;
-
-typedef struct {
-    int file_descriptor;
-    uint32_t file_length;
-    uint32_t pages_num;
-    void* pages[TABLE_MAX_PAGES];
-} Pager;
-
-typedef struct {
-    Pager* pager;
-    uint32_t root_page_num;
-} Table;
-
-typedef struct {
-    Table* table;
-    uint32_t page_num;
-    uint32_t cell_num;
-    bool is_end_of_table;
-} Cursor;
 
 void print_row(Row* row) { printf("(%d, %s)\n", row->a, row->b); }
 
