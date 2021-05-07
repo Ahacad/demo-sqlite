@@ -4,6 +4,7 @@
 /* Compare: diff out.txt ans.txt */
 
 #include <signal.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,7 +43,8 @@ InputResult read_input() {
     return INPUT_SUCCESS;
 }
 
-void open_file(const char* filename) { /* open file */ }
+void open_file(const char* filename) { /* open file */
+}
 
 void exit_nicely(int code) {
     /* do clean work */
@@ -57,11 +59,32 @@ void exit_success() {
 /* specialization of data structure */
 
 #define COLUMN_B_SIZE 11
+#define TABLE_MAX_PAGES 500
+// FIXME: test whether 500 is enough
 
 typedef struct {
     uint32_t a;
     char b[COLUMN_B_SIZE + 1];
 } Row;
+
+typedef struct {
+    int file_descriptor;
+    uint32_t file_length;
+    uint32_t pages_num;
+    void* pages[TABLE_MAX_PAGES];
+} Pager;
+
+typedef struct {
+    Pager* pager;
+    uint32_t root_page_num;
+} Table;
+
+typedef struct {
+    Table* table;
+    uint32_t page_num;
+    uint32_t cell_num;
+    bool is_end_of_table;
+} Cursor;
 
 void print_row(Row* row) { printf("(%d, %s)\n", row->a, row->b); }
 
@@ -82,6 +105,8 @@ struct {
 /* B-Tree operations */
 
 typedef enum { NODE_INTERNAL, NODE_LEAF } NodeType;
+
+/* leaf node body */
 
 /* the key to select is stored in `statement.row.b` */
 void b_tree_search() {
