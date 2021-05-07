@@ -128,6 +128,7 @@ InputResult read_input() {
     return INPUT_SUCCESS;
 }
 
+// get one page by page_num
 void* get_page(Pager* pager, uint32_t page_num) {
     if (page_num > TABLE_MAX_PAGES) {
         // FIXME: handle more pages than boundary
@@ -189,6 +190,7 @@ void set_node_type(void* node, NodeType type) {
 void set_node_root(void* node, bool is_root) {
     uint8_t value = is_root;
     *((uint8_t*)(node + IS_ROOT_OFFSET)) = value;
+}
 bool is_node_root(void* node) {
     uint8_t value = *((uint8_t*)(node + IS_ROOT_OFFSET));
     return (bool)value;
@@ -233,8 +235,8 @@ void open_file(const char* filename) { /* open file */
     if (pager->num_pages == 0) {
         // new table
         void* root_node = get_page(pager, 0);
-        /*initialize_leaf_node(root_node);*/
-        /*set_onde_root(root_node, true);*/
+        initialize_leaf_node(root_node);
+        set_node_root(root_node, true);
     }
 }
 
@@ -276,11 +278,50 @@ void b_tree_search() {
     printf("[INFO] select: %s\n", statement.row.b);
 }
 
+Cursor* leaf_node_find(uint32_t page_num, uint32_t key) {
+    void* node = get_page(table.pager, page_num);
+    uint32_t num_cells = *leaf_node_num_cells(node);
+
+    Cursor* cursor = malloc(sizeof(Cursor));
+    cursor->table = &table;
+    cursor->page_num = page_num;
+    cursor->is_end_of_table = false;
+
+    // binary search
+    uint32_t left = 0, right = num_cells, mid, key_at_index;
+    while (left != right) {
+        mid = left + ((right - left) >> 2);
+        key_at_index = *leaf_node_key(node, mid);
+        if (key == key_at_index) {
+            cursor->cell_num = mid;
+            return cursor;
+        } else if (key < key_at_index) {
+            right = mid;
+        } else {
+            left = mid + 1;
+        }
+    }
+    cursor->cell_num = left;
+    return cursor;
+}
+Cursor* table_find(uint32_t key) {
+    uint32_t root_page_num = table.root_page_num;
+    void* root_node = get_page(table.pager, root_page_num);
+    if (get_node_type(root_node) == NODE_LEAF) {
+        return leaf_node_find(root_page_num, key);
+    } else {
+        return internal_node_find(root_page_num, key);
+    }
+}
+
 /* the row to insert is stored in `statement.row` */
 void b_tree_insert() {
     /* insert a row */
     printf("[INFO] insert: ");
     print_row(&statement.row);
+    Row row_to_insert = statement.row;
+    uint32_t key_to_insert = row_to_insert.a;
+    Cursor* cursor = table_find(key_to_insert);
 }
 
 /* the key to delete is stored in `statement.row.b` */
