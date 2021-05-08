@@ -56,6 +56,11 @@ typedef enum { NODE_INTERNAL, NODE_LEAF } NodeType;
  */
 Cursor* leaf_node_find(uint32_t page_num, uint32_t key);
 
+// database utility functions
+uint32_t get_unused_page_num(Pager* pager);
+void* get_page(Pager* pager, uint32_t page_num);
+Pager* pager_open(const char* filename);
+void serialize_row(Row* source, void* destination);
 // node common
 NodeType get_node_type(void* node);
 void set_node_type(void* node, NodeType type);
@@ -64,11 +69,18 @@ bool is_node_root(void* node);
 uint32_t get_node_max_key(void* node);
 uint32_t* node_parent(void* node);
 // internal nodes
+uint32_t* internal_node_cell(void* node, uint32_t cell_num);
 uint32_t* internal_node_key(void* node, uint32_t key_num);
+uint32_t* internal_node_right_child(void* node);
 uint32_t* internal_node_num_keys(void* node);
+uint32_t* internal_node_child(void* node, uint32_t child_num);
+void initialize_internal_node(void* node);
 // leaf nodes
-uint32_t* leaf_node_key(void* node, uint32_t key_num);
 uint32_t* leaf_node_num_cells(void* node);
+uint32_t* leaf_node_next_leaf(void* node);
+uint32_t* leaf_node_cell(void* node, uint32_t cell_num);
+uint32_t* leaf_node_key(void* node, uint32_t key_num);
+void initialize_leaf_node(void* node);
 
 // TODO: move all definitions here to give autocompletion
 
@@ -210,6 +222,27 @@ Pager* pager_open(const char* filename) {
 
     return pager;
 }
+void create_new_root(uint32_t right_child_page_num) {
+    void* root = get_page(table.pager, table.root_page_num);
+    void* right_child = get_page(table.pager, right_child_page_num);
+    uint32_t left_child_page_num = get_unused_page_num(table.pager);
+    void* left_child = get_page(table.pager, left_child_page_num);
+
+    // left child has old root all data
+    memcpy(left_child, root, PAGE_SIZE);
+    set_node_root(left_child, false);
+    // set root node to internal node
+    initialize_internal_node(root);
+    set_node_root(root, true);
+    *internal_node_num_keys(root) = 1;
+    *internal_node_child(root, 0) = left_child_page_num;
+    uint32_t left_child_max_key = get_node_max_key(left_child);
+    *internal_node_key(root, 0) = left_child_max_key;
+    *internal_node_right_child(root) = right_child_page_num;
+    *node_parent(left_child) = table.root_page_num;
+    *node_parent(right_child) = table.root_page_num;
+}
+
 // copy data to database
 void serialize_row(Row* source, void* destination) {
     memcpy(destination + A_OFFSET, &(source->a), A_SIZE);
@@ -236,6 +269,7 @@ bool is_node_root(void* node) {
     uint8_t value = *((uint8_t*)(node + IS_ROOT_OFFSET));
     return (bool)value;
 }
+// get max key number for a node
 uint32_t get_node_max_key(void* node) {
     switch (get_node_type(node)) {
         case NODE_INTERNAL:
@@ -264,6 +298,7 @@ uint32_t* internal_node_right_child(void* node) {
 uint32_t* internal_node_num_keys(void* node) {
     return node + INTERNAL_NODE_NUM_KEYS_OFFSET;
 }
+// get child from an internal node by child number
 uint32_t* internal_node_child(void* node, uint32_t child_num) {
     uint32_t num_keys = *internal_node_num_keys(node);
     if (child_num > num_keys) {
@@ -274,16 +309,19 @@ uint32_t* internal_node_child(void* node, uint32_t child_num) {
         return internal_node_cell(node, child_num);
     }
 }
-//
+// leaf node utility functions
 uint32_t* leaf_node_num_cells(void* node) {
     return node + LEAF_NODE_NUM_CELLS_OFFSET;
 }
+// get leaf-node-next key
 uint32_t* leaf_node_next_leaf(void* node) {
     return node + LEAF_NODE_NEXT_LEAF_OFFSET;
 }
+// get one particular cell in a leaf node by cell number
 uint32_t* leaf_node_cell(void* node, uint32_t cell_num) {
     return node + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE;
 }
+//      return create_new
 uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
     return leaf_node_cell(node, cell_num);
 }
@@ -425,12 +463,45 @@ Cursor* table_find(uint32_t key) {
 
 // node is full, need spliting
 void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
+    // old node on the left, new node on the right
     void* old_node = get_page(cursor->table->pager, cursor->page_num);
     uint32_t old_max = get_node_max_key(old_node);
     uint32_t new_page_num = get_unused_page_num(cursor->table->pager);
     void* new_node = get_page(cursor->table->pager, new_page_num);
     initialize_leaf_node(new_node);
-    *
+    *node_parent(new_node) = *node_parent(old_node);
+    *leaf_node_next_leaf(new_node) = *leaf_node_next_leaf(old_node);
+    *leaf_node_next_leaf(old_node) = new_page_num;
+
+    for (int32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--) {
+        void* destination_node;
+        if (i >= LEAF_NODE_LEFT_SPLIT_COUNT) {
+            destination_node = new_node;
+        } else {
+            destination_node = old_node;
+        }
+        uint32_t index_within_node = i % LEAF_NODE_LEFT_SPLIT_COUNT;
+        void* destination = leaf_node_cell(destination_node, index_within_node);
+
+        if (i == cursor->cell_num) {
+            serialize_row(value,
+                          leaf_node_value(destination_node, index_within_node));
+            *leaf_node_key(destination_node, index_within_node) = key;
+        } else if (i > cursor->cell_num) {
+            memcpy(destination, leaf_node_cell(old_node, i - 1),
+                   LEAF_NODE_CELL_SIZE);
+        } else {
+            memcpy(destination, leaf_node_cell(old_node, i),
+                   LEAF_NODE_CELL_SIZE);
+        }
+    }
+
+    *(leaf_node_num_cells(old_node)) = LEAF_NODE_LEFT_SPLIT_COUNT;
+    *(leaf_node_num_cells(new_node)) = LEAF_NODE_RIGHT_SPLIT_COUNT;
+    // if original node node, i.e. no parent
+    if (is_node_root(old_node)) {
+        return create_new
+    }
 }
 // handle inserting node
 void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
