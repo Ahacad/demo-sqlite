@@ -49,17 +49,32 @@ typedef struct {
 } Cursor;
 Table table;
 
+typedef enum { NODE_INTERNAL, NODE_LEAF } NodeType;
+
 /*
  *functions declartions
  */
 Cursor* leaf_node_find(uint32_t page_num, uint32_t key);
+
+// node common
+NodeType get_node_type(void* node);
+void set_node_type(void* node, NodeType type);
+void set_node_root(void* node, bool is_root);
+bool is_node_root(void* node);
+uint32_t get_node_max_key(void* node);
+uint32_t* node_parent(void* node);
+// internal nodes
+uint32_t* internal_node_key(void* node, uint32_t key_num);
+uint32_t* internal_node_num_keys(void* node);
+// leaf nodes
+uint32_t* leaf_node_key(void* node, uint32_t key_num);
+uint32_t* leaf_node_num_cells(void* node);
+
 // TODO: move all definitions here to give autocompletion
 
 /*
  *nodes
  */
-
-typedef enum { NODE_INTERNAL, NODE_LEAF } NodeType;
 
 // common header
 const uint32_t NODE_TYPE_SIZE = sizeof(uint8_t);
@@ -139,6 +154,13 @@ InputResult read_input() {
     return INPUT_SUCCESS;
 }
 
+/*
+ *database utility functions
+ */
+uint32_t get_unused_page_num(Pager* pager) {
+    return pager->num_pages;
+    // TODO: recycle free pages
+}
 // get one page by page_num
 void* get_page(Pager* pager, uint32_t page_num) {
     if (page_num > TABLE_MAX_PAGES) {
@@ -165,7 +187,6 @@ void* get_page(Pager* pager, uint32_t page_num) {
     }
     return pager->pages[page_num];
 }
-
 Pager* pager_open(const char* filename) {
     int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
     if (fd == -1) {
@@ -189,12 +210,15 @@ Pager* pager_open(const char* filename) {
 
     return pager;
 }
+// copy data to database
+void serialize_row(Row* source, void* destination) {
+    memcpy(destination + A_OFFSET, &(source->a), A_SIZE);
+    memcpy(destination + B_OFFSET, &(source->b), B_SIZE);
+}
 
 /*
  *node utility functions
  */
-
-void serialize_row(Row* source, void* destination){memcpy(destination +)}
 
 NodeType get_node_type(void* node) {
     uint8_t value = *((uint8_t*)(node + NODE_TYPE_OFFSET));
@@ -212,6 +236,18 @@ bool is_node_root(void* node) {
     uint8_t value = *((uint8_t*)(node + IS_ROOT_OFFSET));
     return (bool)value;
 }
+uint32_t get_node_max_key(void* node) {
+    switch (get_node_type(node)) {
+        case NODE_INTERNAL:
+            return *internal_node_key(node, *internal_node_num_keys(node) - 1);
+        case NODE_LEAF:
+            return *leaf_node_key(node, *leaf_node_num_cells(node) - 1);
+    }
+}
+// return parent pointer of a node
+uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET; }
+
+// internal nodes utility functions
 // return pointer to a cell in internal node
 uint32_t* internal_node_cell(void* node, uint32_t cell_num) {
     return node + INTERNAL_NODE_HEADER_SIZE +
@@ -259,6 +295,7 @@ void initialize_internal_node(void* node) {
     set_node_root(node, false);
     *internal_node_num_keys(node) = 0;
 }
+// new leaf node
 void initialize_leaf_node(void* node) {
     set_node_type(node, NODE_LEAF);
     set_node_root(node, false);
@@ -386,6 +423,16 @@ Cursor* table_find(uint32_t key) {
     }
 }
 
+// node is full, need spliting
+void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
+    void* old_node = get_page(cursor->table->pager, cursor->page_num);
+    uint32_t old_max = get_node_max_key(old_node);
+    uint32_t new_page_num = get_unused_page_num(cursor->table->pager);
+    void* new_node = get_page(cursor->table->pager, new_page_num);
+    initialize_leaf_node(new_node);
+    *
+}
+// handle inserting node
 void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     void* node = get_page(cursor->table->pager, cursor->page_num);
     uint32_t num_cells = *leaf_node_num_cells(node);
@@ -421,7 +468,9 @@ void b_tree_insert() {
     if (cursor->cell_num < num_cells) {
         // FIXME: handle duplicate key
     }
-    // TODO
+
+    leaf_node_insert(cursor, row_to_insert->a, row_to_insert);
+    free(cursor);
 }
 
 /* the key to delete is stored in `statement.row.b` */
