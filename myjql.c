@@ -25,7 +25,12 @@ typedef struct {
     uint32_t a;
     char b[COLUMN_B_SIZE + 1];
 } Row;
-const uint32_t ROW_SIZE = size_of_attribute(Row, a) + size_of_attribute(Row, b);
+const uint32_t A_SIZE = size_of_attribute(Row, a);
+const uint32_t B_SIZE = size_of_attribute(Row, b);
+const uint32_t A_OFFSET = 0;
+const uint32_t B_OFFSET = A_OFFSET + A_SIZE;
+const uint32_t ROW_SIZE = A_SIZE + B_SIZE;
+
 typedef struct {
     int file_descriptor;
     uint32_t file_length;
@@ -188,6 +193,8 @@ Pager* pager_open(const char* filename) {
 /*
  *node utility functions
  */
+
+void serialize_row(Row* source, void* destination){memcpy(destination +)}
 
 NodeType get_node_type(void* node) {
     uint8_t value = *((uint8_t*)(node + NODE_TYPE_OFFSET));
@@ -379,19 +386,41 @@ Cursor* table_find(uint32_t key) {
     }
 }
 
+void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
+    void* node = get_page(cursor->table->pager, cursor->page_num);
+    uint32_t num_cells = *leaf_node_num_cells(node);
+    if (num_cells >= LEAF_NODE_MAX_CELLS) {
+        // node is full
+        leaf_node_split_and_insert(cursor, key, value);
+        return;
+    }
+    if (cursor->cell_num < num_cells) {
+        // in the middle
+        for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
+            memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1),
+                   LEAF_NODE_CELL_SIZE);
+        }
+    }
+    *(leaf_node_num_cells(node)) += 1;
+    *(leaf_node_key(node, cursor->cell_num)) = key;
+    serialize_row(value, leaf_node_value(node, cursor->cell_num));
+}
 /* the row to insert is stored in `statement.row` */
 void b_tree_insert() {
     /* insert a row */
     printf("[INFO] insert: ");
     print_row(&statement.row);
 
-    Row row_to_insert = statement.row;
-    uint32_t key_to_insert = row_to_insert.a;
+    Row* row_to_insert = &statement.row;
+    uint32_t key_to_insert = row_to_insert->a;
     Cursor* cursor = table_find(key_to_insert);
 
     void* node = get_page(table.pager, cursor->page_num);
     uint32_t num_cells = *leaf_node_num_cells(node);
 
+    if (cursor->cell_num < num_cells) {
+        // FIXME: handle duplicate key
+    }
     // TODO
 }
 
