@@ -61,6 +61,8 @@ uint32_t get_unused_page_num(Pager* pager);
 void* get_page(Pager* pager, uint32_t page_num);
 Pager* pager_open(const char* filename);
 void serialize_row(Row* source, void* destination);
+Cursor* table_find(uint32_t key);
+Cursor* table_start();
 // node common
 NodeType get_node_type(void* node);
 void set_node_type(void* node, NodeType type);
@@ -70,6 +72,7 @@ uint32_t get_node_max_key(void* node);
 uint32_t* node_parent(void* node);
 // internal nodes
 uint32_t internal_node_find_child(void* node, uint32_t key);
+Cursor* internal_node_find(uint32_t page_num, uint32_t key);
 uint32_t* internal_node_cell(void* node, uint32_t cell_num);
 uint32_t* internal_node_key(void* node, uint32_t key_num);
 uint32_t* internal_node_right_child(void* node);
@@ -256,6 +259,7 @@ void serialize_row(Row* source, void* destination) {
  *node utility functions
  */
 
+// return node type (internal node OR leaf node)
 NodeType get_node_type(void* node) {
     uint8_t value = *((uint8_t*)(node + NODE_TYPE_OFFSET));
     return (NodeType)value;
@@ -347,7 +351,11 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
         *internal_node_key(parent, index) = child_max_key;
     }
 }
-// leaf node utility functions
+/*
+ * leaf node utility functions
+ */
+
+// return number of cells on a leaf node
 uint32_t* leaf_node_num_cells(void* node) {
     return node + LEAF_NODE_NUM_CELLS_OFFSET;
 }
@@ -428,12 +436,36 @@ struct {
 
 /* B-Tree operations */
 
-/* leaf node body */
+// return position of a given key
+// if not present return the position where it should be inserted
+Cursor* table_find(uint32_t key) {
+    uint32_t root_page_num = table.root_page_num;
+    void* root_node = get_page(table.pager, root_page_num);
+
+    if (get_node_type(root_node) == NODE_LEAF) {
+        return leaf_node_find(root_page_num, key);
+    } else {
+        return internal_node_find(root_page_num, key);
+    }
+}
+// return table start position
+Cursor* table_start() {
+    Cursor* cursor = table_find(0);
+    void* node = get_page(table.pager, cursor->page_num);
+    uint32_t num_cells = *leaf_node_num_cells(node);
+    cursor->is_end_of_table = (num_cells == 0);
+    return cursor;
+}
 
 /* the key to select is stored in `statement.row.b` */
 void b_tree_search() {
     /* print selected rows */
     printf("[INFO] select: %s\n", statement.row.b);
+    Cursor* cursor = table_start();
+    Row row;
+    while (!(cursor->is_end_of_table)) {
+        // TODO
+    }
 }
 
 // return index of the child which should contain the key
@@ -453,6 +485,8 @@ uint32_t internal_node_find_child(void* node, uint32_t key) {
     }
     return left;
 }
+// find key on an internal node (will be found recursivelly and return leaf node
+// index)
 Cursor* internal_node_find(uint32_t page_num, uint32_t key) {
     void* node = get_page(table.pager, page_num);
 
@@ -466,6 +500,7 @@ Cursor* internal_node_find(uint32_t page_num, uint32_t key) {
             return internal_node_find(child_num, key);
     }
 }
+// find key on a leaf
 Cursor* leaf_node_find(uint32_t page_num, uint32_t key) {
     // find key on leaf node
     void* node = get_page(table.pager, page_num);
