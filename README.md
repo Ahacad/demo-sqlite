@@ -2,7 +2,7 @@
 
 leaf node: 
 
-| name        | size(bype) |
+| name        | size(byte) |
 | ---         | ---        |
 | node_type   | 1          |
 | is_root     | 1          |
@@ -15,7 +15,7 @@ leaf node:
 
 internal node:
 
-| name        | size(bype) |
+| name        | size(byte) |
 | ---         | ---        |
 | node_type   | 1          |
 | is_root     | 1          |
