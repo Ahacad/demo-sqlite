@@ -12,6 +12,16 @@
 #include <string.h>
 #include <unistd.h>
 
+// print memory by hex, used for debugging
+void print_bytes(void* ptr, int size) {
+    unsigned char* p = ptr;
+    int i;
+    for (i = 0; i < size; i++) {
+        printf("%02hhX ", p[i]);
+    }
+    printf("\n");
+}
+
 /*
  *table
  */
@@ -254,11 +264,16 @@ void create_new_root(uint32_t right_child_page_num) {
 void serialize_row(Row* source, void* destination) {
     memcpy(destination + A_OFFSET, &(source->a), A_SIZE);
     memcpy(destination + B_OFFSET, &(source->b), B_SIZE);
+    /*printf(*/
+    /*"Serializing: ASIZE: %d, BSIZE: %d, CELLSIZE %d "*/
+    /*"\n",*/
+    /*A_SIZE, B_SIZE, LEAF_NODE_CELL_SIZE);*/
 }
 // copy data from database to destination
 void deserialize_row(void* source, Row* destination) {
     memcpy(&(destination->a), source + A_OFFSET, A_SIZE);
     memcpy(&(destination->b), source + B_OFFSET, B_SIZE);
+    /*print_bytes(source, 4 + 12 + 4 + 4 + 12 + 4);*/
 }
 
 /*
@@ -363,22 +378,23 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
 
 // return number of cells on a leaf node
 uint32_t* leaf_node_num_cells(void* node) {
-    return node + LEAF_NODE_NUM_CELLS_OFFSET;
+    return node + LEAF_NODE_NUM_CELLS_OFFSET * 8;
 }
 // get leaf-node-next key
 uint32_t* leaf_node_next_leaf(void* node) {
-    return node + LEAF_NODE_NEXT_LEAF_OFFSET;
+    return node + LEAF_NODE_NEXT_LEAF_OFFSET * 8;
 }
 // get one particular cell in a leaf node by cell number
 uint32_t* leaf_node_cell(void* node, uint32_t cell_num) {
-    return node + LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE;
+    return node + (LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE) * 8;
 }
-//      return create_new
+// return key of a cell
 uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
     return leaf_node_cell(node, cell_num);
 }
+// return value of a cell (a, b)
 uint32_t* leaf_node_value(void* node, uint32_t cell_num) {
-    return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
+    return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE * 8;
 }
 void initialize_internal_node(void* node) {
     set_node_type(node, NODE_INTERNAL);
@@ -613,20 +629,49 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     void* node = get_page(cursor->table->pager, cursor->page_num);
     uint32_t num_cells = *leaf_node_num_cells(node);
     if (num_cells >= LEAF_NODE_MAX_CELLS) {
+        /*printf("I SPLIT MYSELF!\n");*/
         // node is full
         leaf_node_split_and_insert(cursor, key, value);
         return;
     }
     if (cursor->cell_num < num_cells) {
+        /*printf("I AM IN THE MIDDLE\n");*/
         // in the middle
         for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
             memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1),
                    LEAF_NODE_CELL_SIZE);
         }
     }
+    /*printf("I AM IN THE RIGHT WAY\n");*/
     *(leaf_node_num_cells(node)) += 1;
     *(leaf_node_key(node, cursor->cell_num)) = key;
     serialize_row(value, leaf_node_value(node, cursor->cell_num));
+    /*printf(*/
+    /*"node %p, cursor cellnum %d, node cell pos %p, wrote key to %p, val "*/
+    /*"to "*/
+    /*"%p, LEAF_NODE_KEY_SIZE: %d, LEAF_NODE_CELL_SIZE: %d, \n"*/
+    /*"val pos - key pos: %ld\n"*/
+
+    /*,*/
+    /*node, cursor->cell_num, leaf_node_cell(node, cursor->cell_num),*/
+    /*leaf_node_key(node, cursor->cell_num),*/
+    /*leaf_node_value(node, cursor->cell_num), LEAF_NODE_KEY_SIZE,*/
+    /*LEAF_NODE_CELL_SIZE,*/
+    /*leaf_node_value(node, cursor->cell_num) -*/
+    /*leaf_node_key(node, cursor->cell_num));*/
+    /*printf("key pos: %p, value pos: %p\n",*/
+    /*leaf_node_key(node, cursor->cell_num),*/
+    /*leaf_node_value(node, cursor->cell_num));*/
+    /*printf("val & key diff: %ld\n", leaf_node_value(node, cursor->cell_num)
+     * -*/
+    /*leaf_node_key(node, cursor->cell_num));*/
+    /*printf("cellnum: %d\n", cursor->cell_num);*/
+    /*printf("a: %d, b: %s\n", value->a, value->b);*/
+    /*print_bytes(leaf_node_cell(node, cursor->cell_num), 4 + 4 + 12 + 12);*/
+    /*print_bytes(leaf_node_value(node, cursor->cell_num), 4 + 4 + 12 + 12);*/
+    /*printf("LEAF NODE KEY SIZE: %d\n", LEAF_NODE_KEY_SIZE);*/
+    /*printf("DIFF: %ld\n", leaf_node_value(node, cursor->cell_num) -*/
+    /*leaf_node_cell(node, cursor->cell_num));*/
     printf("Serialized\n");
 }
 /* the row to insert is stored in `statement.row` */
@@ -638,9 +683,13 @@ void b_tree_insert() {
     Row* row_to_insert = &statement.row;
     uint32_t key_to_insert = row_to_insert->a;
     Cursor* cursor = table_find(key_to_insert);
+    /*printf("found insert place: pagenum: %d, cellnum: %d\n",
+     * cursor->page_num,*/
+    /*cursor->cell_num);*/
 
     void* node = get_page(table.pager, cursor->page_num);
     uint32_t num_cells = *leaf_node_num_cells(node);
+    /*printf("%d cells in node\n", num_cells);*/
 
     if (cursor->cell_num < num_cells) {
         // FIXME: handle duplicate key
