@@ -462,6 +462,30 @@ Cursor* table_start() {
     cursor->is_end_of_table = (num_cells == 0);
     return cursor;
 }
+// get leaf node value of current cursor's node
+void* cursor_value(Cursor* cursor) {
+    uint32_t page_num = cursor->page_num;
+    void* page = get_page(cursor->table->pager, page_num);
+    return leaf_node_value(page, cursor->cell_num);
+}
+// advance cursor by 1
+void cursor_advance(Cursor* cursor) {
+    uint32_t page_num = cursor->page_num;
+    void* node = get_page(cursor->table->pager, page_num);
+
+    cursor->cell_num += 1;
+    if (cursor->cell_num >= (*leaf_node_num_cells(node))) {
+        // advance into next leaf node
+        uint32_t next_page_num = *leaf_node_next_leaf(node);
+        if (next_page_num == 0) {
+            // already last node
+            cursor->is_end_of_table = true;
+        } else {
+            cursor->page_num = next_page_num;
+            cursor->cell_num = 0;
+        }
+    }
+}
 
 /* the key to select is stored in `statement.row.b` */
 void b_tree_search() {
@@ -637,8 +661,12 @@ void b_tree_traverse() {
     Cursor* cursor = table_start();
     Row row;
     while (!(cursor->is_end_of_table)) {
-        dese
+        deserialize_row(cursor_value(cursor), &row);
+        print_row(&row);
+        cursor_advance(cursor);
     }
+    free(cursor);
+
     printf("[INFO] traverse\n");
 }
 
