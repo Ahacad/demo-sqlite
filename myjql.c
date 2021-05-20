@@ -528,15 +528,6 @@ Cursor* leaf_node_find(uint32_t page_num, uint32_t key) {
     cursor->cell_num = left;
     return cursor;
 }
-Cursor* table_find(uint32_t key) {
-    uint32_t root_page_num = table.root_page_num;
-    void* root_node = get_page(table.pager, root_page_num);
-    if (get_node_type(root_node) == NODE_LEAF) {
-        return leaf_node_find(root_page_num, key);
-    } else {
-        return internal_node_find(root_page_num, key);
-    }
-}
 
 // node is full, need spliting
 void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
@@ -606,6 +597,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     *(leaf_node_num_cells(node)) += 1;
     *(leaf_node_key(node, cursor->cell_num)) = key;
     serialize_row(value, leaf_node_value(node, cursor->cell_num));
+    printf("Serialized\n");
 }
 /* the row to insert is stored in `statement.row` */
 void b_tree_insert() {
@@ -657,8 +649,54 @@ typedef enum {
     PREPARE_EMPTY_STATEMENT
 } PrepareResult;
 
+void pager_flush(Pager* pager, uint32_t page_num) {
+    if (pager->pages[page_num] == NULL) {
+        // FIXME: handle flush null page
+    }
+
+    off_t offset =
+        lseek(pager->file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
+    if (offset == -1) {
+        // FIXME: handle error seeking
+    }
+    ssize_t bytes_written =
+        write(pager->file_descriptor, pager->pages[page_num], PAGE_SIZE);
+    if (bytes_written == -1) {
+        // FIXME: handle error writing
+    }
+}
+
+void db_close() {
+    Pager* pager = table.pager;
+
+    for (uint32_t i = 0; i < pager->num_pages; i++) {
+        if (pager->pages[i] == NULL) {
+            continue;
+        }
+        pager_flush(pager, i);
+        free(pager->pages[i]);
+        pager->pages[i] = NULL;
+    }
+
+    int result = close(pager->file_descriptor);
+    if (result == -1) {
+        // FIXME: handle close error
+    }
+
+    // check if there is any dirty page unhandled above
+    for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+        void* page = pager->pages[i];
+        if (page) {
+            free(page);
+            pager->pages[i] = NULL;
+        }
+    }
+    free(pager);
+}
+
 MetaCommandResult do_meta_command() {
     if (strcmp(input_buffer.buffer, ".exit") == 0) {
+        db_close();
         exit(EXIT_SUCCESS);
     } else {
         return META_COMMAND_UNRECOGNIZED_COMMAND;
