@@ -61,6 +61,7 @@ uint32_t get_unused_page_num(Pager* pager);
 void* get_page(Pager* pager, uint32_t page_num);
 Pager* pager_open(const char* filename);
 void serialize_row(Row* source, void* destination);
+void deserialize_row(void* source, Row* destination);
 Cursor* table_find(uint32_t key);
 Cursor* table_start();
 // node common
@@ -253,6 +254,11 @@ void create_new_root(uint32_t right_child_page_num) {
 void serialize_row(Row* source, void* destination) {
     memcpy(destination + A_OFFSET, &(source->a), A_SIZE);
     memcpy(destination + B_OFFSET, &(source->b), B_SIZE);
+}
+// copy data from database to destination
+void deserialize_row(void* source, Row* destination) {
+    memcpy(&(destination->a), source + A_OFFSET, A_SIZE);
+    memcpy(&(destination->b), source + B_OFFSET, B_SIZE);
 }
 
 /*
@@ -628,6 +634,11 @@ void b_tree_delete() {
 
 void b_tree_traverse() {
     /* print all rows */
+    Cursor* cursor = table_start();
+    Row row;
+    while (!(cursor->is_end_of_table)) {
+        dese
+    }
     printf("[INFO] traverse\n");
 }
 
