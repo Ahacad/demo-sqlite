@@ -584,10 +584,6 @@ void b_tree_search() {
     while (!(cursor->is_end_of_table)) {
         if (memcmp(cursor_value(cursor) + B_OFFSET, statement.row.b, B_SIZE) ==
             0) {
-            /*printf("statement.b.row: \n");*/
-            /*print_bytes(statement.row.b, B_SIZE);*/
-            /*printf("source b value: \n");*/
-            /*print_bytes(cursor_value(cursor) + B_OFFSET, B_SIZE);*/
             deserialize_row(cursor_value(cursor), &row);
             print_row(&row);
         }
@@ -754,10 +750,31 @@ void b_tree_insert() {
     free(cursor);
 }
 
+void leaf_node_delete(Cursor* cursor) {
+    uint32_t page_num = cursor->page_num;
+    void* node = get_page(cursor->table->pager, page_num);
+    for (uint32_t i = cursor->cell_num; i < *leaf_node_num_cells(node) - 1;
+         i--) {
+        memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i + 1),
+               LEAF_NODE_CELL_SIZE);
+    }
+    *leaf_node_num_cells(node) -= 1;
+
+    // TODO: handle after deletion
+}
+
 /* the key to delete is stored in `statement.row.b` */
-void b_tree_delete() {
-    /* delete row(s) */
-    printf("[INFO] delete: %s\n", statement.row.b);
+void b_tree_delete() { /* delete row(s) */
+    Cursor* cursor = table_start();
+    Row row;
+    while (!(cursor->is_end_of_table)) {
+        if (memcmp(cursor_value(cursor) + B_OFFSET, statement.row.b, B_SIZE) ==
+            0) {
+            leaf_node_delete(cursor);
+        }
+        cursor_advance(cursor);
+    }
+    free(cursor);
 }
 
 void b_tree_traverse() {
