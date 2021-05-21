@@ -664,37 +664,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     *(leaf_node_num_cells(node)) += 1;
     *(leaf_node_key(node, cursor->cell_num)) = key;
     serialize_row(value, leaf_node_value(node, cursor->cell_num));
-    /*printf("cell pos: %p, val pos: %p, leaf node key size: %d\n",*/
-    /*leaf_node_key(node, cursor->cell_num),*/
-    /*leaf_node_value(node, cursor->cell_num), LEAF_NODE_KEY_SIZE);*/
-    /*printf(*/
-    /*"node %p, cursor cellnum %d, node cell pos %p, wrote key to %p, val "*/
-    /*"to "*/
-    /*"%p, LEAF_NODE_KEY_SIZE: %d, LEAF_NODE_CELL_SIZE: %d, \n"*/
-    /*"val pos - key pos: %ld\n"*/
-
-    /*,*/
-    /*node, cursor->cell_num, leaf_node_cell(node, cursor->cell_num),*/
-    /*leaf_node_key(node, cursor->cell_num),*/
-    /*leaf_node_value(node, cursor->cell_num), LEAF_NODE_KEY_SIZE,*/
-    /*LEAF_NODE_CELL_SIZE,*/
-    /*leaf_node_value(node, cursor->cell_num) -*/
-    /*leaf_node_key(node, cursor->cell_num));*/
-    /*printf("key pos: %p, value pos: %p\n",*/
-    /*leaf_node_key(node, cursor->cell_num),*/
-    /*leaf_node_value(node, cursor->cell_num));*/
-    /*printf("val & key diff: %ld\n", leaf_node_value(node, cursor->cell_num)
-     * -*/
-    /*leaf_node_key(node, cursor->cell_num));*/
-    /*printf("cellnum: %d\n", cursor->cell_num);*/
-    /*printf("a: %d, b: %s\n", value->a, value->b);*/
-    /*print_bytes(leaf_node_cell(node, cursor->cell_num), 4 + 4 + 12 + 12);*/
-    /*print_bytes(leaf_node_value(node, cursor->cell_num), 4 + 4 + 12 + 12);*/
-    /*printf("LEAF NODE KEY SIZE: %d\n", LEAF_NODE_KEY_SIZE);*/
-    /*printf("DIFF: %ld\n", leaf_node_value(node, cursor->cell_num) -*/
-    /*leaf_node_cell(node, cursor->cell_num));*/
 }
-/* the row to insert is stored in `statement.row` */
 void b_tree_insert() {
     /* insert a row */
     print_row(&statement.row);
