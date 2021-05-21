@@ -274,7 +274,7 @@ void serialize_row(Row* source, void* destination) {
 void deserialize_row(void* source, Row* destination) {
     memcpy(&(destination->a), source + A_OFFSET, A_SIZE);
     memcpy(&(destination->b), source + B_OFFSET, B_SIZE);
-    /*print_bytes(source, 4 + 12 + 4 + 4 + 12 + 4);*/
+    print_bytes(source + 8 * B_OFFSET, B_SIZE);
 }
 
 /*
@@ -442,7 +442,11 @@ void exit_success() {
 
 /* specialization of data structure */
 
-void print_row(Row* row) { printf("(%d, %s)\n", row->a, row->b); }
+void print_row(Row* row) {
+    printf("(%d, %s)\n", row->a, row->b);
+    /*printf("Printing rows\n");*/
+    /*print_bytes(row->b, B_SIZE);*/
+}
 
 /* statement */
 
@@ -455,7 +459,7 @@ typedef enum {
 struct {
     StatementType type;
     Row row;
-    uint8_t flag; /* whether row.a, row.b have valid values */
+    uint8_t flag;  // 0: only `insert` or `select`, 1: one arg
 } statement;
 
 /* B-Tree operations */
@@ -512,8 +516,17 @@ void b_tree_search() {
     Cursor* cursor = table_start();
     Row row;
     while (!(cursor->is_end_of_table)) {
-        // TODO
+        if (memcpy(cursor_value(cursor) + B_OFFSET * 8, statement.row.b,
+                   B_SIZE * 8)) {
+            /*printf("AMD YES\n");*/
+            print_bytes(statement.row.b, B_SIZE);
+            /*print_bytes(cursor_value(cursor) + 8 * B_OFFSET, 8 * B_SIZE);*/
+            deserialize_row(cursor_value(cursor), &row);
+            print_row(&row);
+            cursor_advance(cursor);
+        }
     }
+    free(cursor);
 }
 
 // return index of the child which should contain the key
@@ -717,6 +730,7 @@ void b_tree_traverse() {
         deserialize_row(cursor_value(cursor), &row);
         print_row(&row);
         cursor_advance(cursor);
+        /*printf("b: %s\n", statement.row.b);*/
     }
     free(cursor);
 }
@@ -826,7 +840,10 @@ PrepareResult prepare_condition() {
     if (strlen(b) > COLUMN_B_SIZE) return PREPARE_STRING_TOO_LONG;
 
     strcpy(statement.row.b, b);
-    statement.flag |= 2;
+
+    if (b != NULL) {
+        statement.flag = 1;
+    }
 
     return PREPARE_SUCCESS;
 }
