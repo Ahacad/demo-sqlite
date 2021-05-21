@@ -315,20 +315,21 @@ uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET; }
 
 // return pointer to a cell in internal node
 uint32_t* internal_node_cell(void* node, uint32_t cell_num) {
-    return node + INTERNAL_NODE_HEADER_SIZE +
-           cell_num * INTERNAL_NODE_CELL_SIZE;
+    return node +
+           (INTERNAL_NODE_HEADER_SIZE + cell_num * INTERNAL_NODE_CELL_SIZE) * 8;
 }
 // get key of one child by its cell number (key_num)
 uint32_t* internal_node_key(void* node, uint32_t key_num) {
-    return (void*)internal_node_cell(node, key_num) + INTERNAL_NODE_CHILD_SIZE;
+    return (void*)internal_node_cell(node, key_num) +
+           INTERNAL_NODE_CHILD_SIZE * 8;
 }
 // return pointer to right child in internal node
 uint32_t* internal_node_right_child(void* node) {
-    return node + INTERNAL_NODE_RIGHT_CHILD_OFFSET;
+    return node + INTERNAL_NODE_RIGHT_CHILD_OFFSET * 8;
 }
 // get pointer to number of keys for internal node
 uint32_t* internal_node_num_keys(void* node) {
-    return node + INTERNAL_NODE_NUM_KEYS_OFFSET;
+    return node + INTERNAL_NODE_NUM_KEYS_OFFSET * 8;
 }
 // get child from an internal node by child number
 uint32_t* internal_node_child(void* node, uint32_t child_num) {
