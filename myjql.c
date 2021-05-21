@@ -517,16 +517,16 @@ void b_tree_search() {
     Cursor* cursor = table_start();
     Row row;
     while (!(cursor->is_end_of_table)) {
-        /*if (memcmp(cursor_value(cursor) + B_OFFSET * 8, statement.row.b,*/
-        /*B_SIZE)) {*/
-        printf("statement.b.row: \n");
-        print_bytes(statement.row.b, B_SIZE);
-        printf("source b value: \n");
-        print_bytes(cursor_value(cursor) + B_OFFSET * 8, B_SIZE);
-        deserialize_row(cursor_value(cursor), &row);
-        print_row(&row);
+        if (memcmp(cursor_value(cursor) + B_OFFSET, statement.row.b, B_SIZE) ==
+            0) {
+            /*printf("statement.b.row: \n");*/
+            /*print_bytes(statement.row.b, B_SIZE);*/
+            /*printf("source b value: \n");*/
+            /*print_bytes(cursor_value(cursor) + B_OFFSET, B_SIZE);*/
+            deserialize_row(cursor_value(cursor), &row);
+            print_row(&row);
+        }
         cursor_advance(cursor);
-        /*}*/
     }
     free(cursor);
 }
@@ -661,13 +661,13 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
                    LEAF_NODE_CELL_SIZE);
         }
     }
-    printf("I AM IN THE RIGHT WAY\n");
+    /*printf("I AM IN THE RIGHT WAY\n");*/
     *(leaf_node_num_cells(node)) += 1;
     *(leaf_node_key(node, cursor->cell_num)) = key;
     serialize_row(value, leaf_node_value(node, cursor->cell_num));
-    printf("cell pos: %p, val pos: %p, leaf node key size: %d\n",
-           leaf_node_key(node, cursor->cell_num),
-           leaf_node_value(node, cursor->cell_num), LEAF_NODE_KEY_SIZE);
+    /*printf("cell pos: %p, val pos: %p, leaf node key size: %d\n",*/
+    /*leaf_node_key(node, cursor->cell_num),*/
+    /*leaf_node_value(node, cursor->cell_num), LEAF_NODE_KEY_SIZE);*/
     /*printf(*/
     /*"node %p, cursor cellnum %d, node cell pos %p, wrote key to %p, val "*/
     /*"to "*/
