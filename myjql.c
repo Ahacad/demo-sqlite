@@ -124,6 +124,8 @@ const uint32_t INTERNAL_NODE_HEADER_SIZE = NODE_HEADER_SIZE +
 // internal node body
 const uint32_t INTERNAL_NODE_CHILD_SIZE = sizeof(uint32_t);
 const uint32_t INTERNAL_NODE_KEY_SIZE = sizeof(uint32_t);
+const uint32_t INTERNAL_NODE_CHILD_OFFSET = 0;
+const uint32_t INTERNAL_NODE_KEY_OFFSET = INTERNAL_NODE_CHILD_SIZE;
 const uint32_t INTERNAL_NODE_CELL_SIZE =
     INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
 const uint32_t INTERNAL_NODE_MAX_CELLS =
@@ -246,7 +248,7 @@ void create_new_root(uint32_t right_child_page_num) {
     uint32_t left_child_page_num = get_unused_page_num(table.pager);
     void* left_child = get_page(table.pager, left_child_page_num);
 
-    // left child has old root all data
+    // left child has old root (leaf node) all data
     memcpy(left_child, root, PAGE_SIZE);
     set_node_root(left_child, false);
     // set root node to internal node
@@ -322,8 +324,7 @@ uint32_t* internal_node_cell(void* node, uint32_t cell_num) {
 }
 // get key of one child by its cell number (key_num)
 uint32_t* internal_node_key(void* node, uint32_t key_num) {
-    return (void*)internal_node_cell(node, key_num) +
-           INTERNAL_NODE_CHILD_SIZE * 8;
+    return (void*)internal_node_cell(node, key_num) + INTERNAL_NODE_KEY_OFFSET;
 }
 // return pointer to right child in internal node
 uint32_t* internal_node_right_child(void* node) {
