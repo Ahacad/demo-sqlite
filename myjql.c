@@ -130,6 +130,10 @@ const uint32_t INTERNAL_NODE_CELL_SIZE =
     INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE;
 const uint32_t INTERNAL_NODE_MAX_CELLS =
     (PAGE_SIZE - INTERNAL_NODE_HEADER_SIZE) / INTERNAL_NODE_CELL_SIZE;
+const uint32_t INTERNAL_NODE_LEFT_SPLIT_SIZE =
+    (INTERNAL_NODE_MAX_CELLS + 1) / 2;
+const uint32_t INTERNAL_NODE_RIGHT_SPLIT_SIZE =
+    (INTERNAL_NODE_MAX_CELLS + 1) - INTERNAL_NODE_LEFT_SPLIT_SIZE - 1;
 // leaf node header
 const uint32_t LEAF_NODE_NUM_CELLS_SIZE = sizeof(uint32_t);
 const uint32_t LEAF_NODE_NUM_CELLS_OFFSET = NODE_HEADER_SIZE;
@@ -355,9 +359,6 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
     uint32_t original_num_keys = *internal_node_num_keys(parent);
     *internal_node_num_keys(parent) = original_num_keys + 1;
 
-    if (original_num_keys >= INTERNAL_NODE_MAX_CELLS) {
-        // TODO: implement internal node split
-    }
     uint32_t right_child_page_num = *internal_node_right_child(parent);
     void* right_child = get_page(table.pager, right_child_page_num);
 
@@ -374,6 +375,70 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
         }
         *internal_node_child(parent, index) = child_page_num;
         *internal_node_key(parent, index) = child_max_key;
+    }
+
+    // first insert node then split
+    if (original_num_keys >= INTERNAL_NODE_MAX_CELLS) {
+        if (is_node_root(parent)) {
+            // parent internal node is root and needs spliting
+            uint32_t new_page_num1 = get_unused_page_num(table.pager);
+            void* new_node1 = get_page(table.pager, new_page_num1);
+            initialize_internal_node(new_node1);
+            uint32_t new_page_num2 = get_unused_page_num(table.pager);
+            void* new_node2 = get_page(table.pager, new_page_num2);
+            initialize_internal_node(new_node2);
+            set_node_root(parent, false);
+            set_node_root(new_node1, true);
+            *node_parent(parent) = new_page_num1;
+            *node_parent(new_node2) = new_page_num1;
+
+            for (int32_t i = INTERNAL_NODE_MAX_CELLS; i >= 0; i--) {
+                if (i == INTERNAL_NODE_LEFT_SPLIT_SIZE) {
+                    // put to root
+                    *internal_node_key(new_node1, 0) =
+                        *internal_node_key(parent, i);
+                    // root child points to left and right
+                    *internal_node_child(new_node1, 0) = parent_page_num;
+                    *internal_node_right_child(new_node1) = new_page_num2;
+                } else if (i > INTERNAL_NODE_LEFT_SPLIT_SIZE) {
+                    // put to right
+                    uint32_t right_index =
+                        i % (INTERNAL_NODE_LEFT_SPLIT_SIZE + 1);
+                    memcpy(new_node2, internal_node_cell(parent, i),
+                           INTERNAL_NODE_CELL_SIZE);
+                    *internal_node_right_child(new_node2) =
+                        *internal_node_right_child(parent);
+                }
+            }
+            *internal_node_right_child(parent) =
+                *internal_node_child(parent, INTERNAL_NODE_LEFT_SPLIT_SIZE);
+            // renumber node key nums
+            *internal_node_num_keys(parent) = INTERNAL_NODE_LEFT_SPLIT_SIZE;
+            *internal_node_num_keys(new_node1) = 1;
+            *internal_node_num_keys(new_node2) = INTERNAL_NODE_RIGHT_SPLIT_SIZE;
+        } else {
+            // new internal node on the right
+            uint32_t new_page_num = get_unused_page_num(table.pager);
+            void* new_node = get_page(table.pager, new_page_num);
+            initialize_internal_node(new_node);
+            for (int32_t i = INTERNAL_NODE_MAX_CELLS; i >= 0; i--) {
+                if (i >= INTERNAL_NODE_LEFT_SPLIT_SIZE) {
+                    uint32_t right_index =
+                        i % (INTERNAL_NODE_LEFT_SPLIT_SIZE + 1);
+                    memcpy(new_node, internal_node_cell(parent, i),
+                           INTERNAL_NODE_CELL_SIZE);
+                    *internal_node_right_child(new_node) =
+                        *internal_node_right_child(parent);
+                }
+            }
+            *internal_node_right_child(parent) =
+                *internal_node_child(parent, INTERNAL_NODE_LEFT_SPLIT_SIZE);
+            *internal_node_num_keys(parent) = INTERNAL_NODE_LEFT_SPLIT_SIZE;
+            *internal_node_num_keys(new_node) =
+                INTERNAL_NODE_RIGHT_SPLIT_SIZE + 1;
+
+            internal_node_insert(*node_parent(parent), new_page_num);
+        }
     }
 }
 /*
@@ -540,7 +605,7 @@ uint32_t internal_node_find_child(void* node, uint32_t key) {
     while (left < right) {
         mid = left + ((right - left) >> 2);
         key_to_right = *internal_node_key(node, mid);
-        if (key_to_right >= mid) {
+        if (key_to_right >= key) {
             right = mid;
         } else {
             left = mid + 1;
