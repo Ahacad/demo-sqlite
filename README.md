@@ -10,8 +10,8 @@ leaf node:
 | num_cells   | 4          |
 | next_leaf   | 4          |
 |             |            |
-| key         | 4          |
-| value       | row size   |
+| key   (a)   | 4          |
+| value (b)   | row size   |
 
 internal node:
 
@@ -23,5 +23,5 @@ internal node:
 | num_keys    | 4          |
 | right_child | 4          |
 |             |            |
-| key         | 4          |
 | child       | 4          |
+| key         | 4          |
