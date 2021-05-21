@@ -274,7 +274,8 @@ void serialize_row(Row* source, void* destination) {
 void deserialize_row(void* source, Row* destination) {
     memcpy(&(destination->a), source + A_OFFSET, A_SIZE);
     memcpy(&(destination->b), source + B_OFFSET, B_SIZE);
-    print_bytes(source + 8 * B_OFFSET, B_SIZE);
+    /*printf("deserializing b, dest & source: \n");*/
+    /*print_bytes(&(destination->b), B_SIZE);*/
 }
 
 /*
@@ -380,15 +381,15 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
 
 // return number of cells on a leaf node
 uint32_t* leaf_node_num_cells(void* node) {
-    return node + LEAF_NODE_NUM_CELLS_OFFSET * 8;
+    return node + LEAF_NODE_NUM_CELLS_OFFSET;
 }
 // get leaf-node-next key
 uint32_t* leaf_node_next_leaf(void* node) {
-    return node + LEAF_NODE_NEXT_LEAF_OFFSET * 8;
+    return node + LEAF_NODE_NEXT_LEAF_OFFSET;
 }
 // get one particular cell in a leaf node by cell number
 uint32_t* leaf_node_cell(void* node, uint32_t cell_num) {
-    return node + (LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE) * 8;
+    return node + (LEAF_NODE_HEADER_SIZE + cell_num * LEAF_NODE_CELL_SIZE);
 }
 // return key of a cell
 uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
@@ -396,7 +397,7 @@ uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
 }
 // return value of a cell (a, b)
 uint32_t* leaf_node_value(void* node, uint32_t cell_num) {
-    return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE * 8;
+    return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE / 4;
 }
 void initialize_internal_node(void* node) {
     set_node_type(node, NODE_INTERNAL);
@@ -444,7 +445,7 @@ void exit_success() {
 
 void print_row(Row* row) {
     printf("(%d, %s)\n", row->a, row->b);
-    /*printf("Printing rows\n");*/
+    /*printf("Printing rows:\n");*/
     /*print_bytes(row->b, B_SIZE);*/
 }
 
@@ -516,15 +517,16 @@ void b_tree_search() {
     Cursor* cursor = table_start();
     Row row;
     while (!(cursor->is_end_of_table)) {
-        if (memcpy(cursor_value(cursor) + B_OFFSET * 8, statement.row.b,
-                   B_SIZE * 8)) {
-            /*printf("AMD YES\n");*/
-            print_bytes(statement.row.b, B_SIZE);
-            /*print_bytes(cursor_value(cursor) + 8 * B_OFFSET, 8 * B_SIZE);*/
-            deserialize_row(cursor_value(cursor), &row);
-            print_row(&row);
-            cursor_advance(cursor);
-        }
+        /*if (memcmp(cursor_value(cursor) + B_OFFSET * 8, statement.row.b,*/
+        /*B_SIZE)) {*/
+        printf("statement.b.row: \n");
+        print_bytes(statement.row.b, B_SIZE);
+        printf("source b value: \n");
+        print_bytes(cursor_value(cursor) + B_OFFSET * 8, B_SIZE);
+        deserialize_row(cursor_value(cursor), &row);
+        print_row(&row);
+        cursor_advance(cursor);
+        /*}*/
     }
     free(cursor);
 }
@@ -656,13 +658,16 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
         // in the middle
         for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
             memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1),
-                   LEAF_NODE_CELL_SIZE * 8);
+                   LEAF_NODE_CELL_SIZE);
         }
     }
-    /*printf("I AM IN THE RIGHT WAY\n");*/
+    printf("I AM IN THE RIGHT WAY\n");
     *(leaf_node_num_cells(node)) += 1;
     *(leaf_node_key(node, cursor->cell_num)) = key;
     serialize_row(value, leaf_node_value(node, cursor->cell_num));
+    printf("cell pos: %p, val pos: %p, leaf node key size: %d\n",
+           leaf_node_key(node, cursor->cell_num),
+           leaf_node_value(node, cursor->cell_num), LEAF_NODE_KEY_SIZE);
     /*printf(*/
     /*"node %p, cursor cellnum %d, node cell pos %p, wrote key to %p, val "*/
     /*"to "*/
