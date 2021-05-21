@@ -6,3 +6,5 @@ cleandb :
 	rm -rf *.db
 cleanall : 
 	rm -rf myjql *.db
+debug : myjql.c
+	gcc -g -o myjql myjql.c
