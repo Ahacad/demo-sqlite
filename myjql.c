@@ -639,7 +639,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
         // in the middle
         for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
             memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1),
-                   LEAF_NODE_CELL_SIZE);
+                   LEAF_NODE_CELL_SIZE * 8);
         }
     }
     /*printf("I AM IN THE RIGHT WAY\n");*/
