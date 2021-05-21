@@ -188,7 +188,7 @@ InputResult read_input() {
  */
 uint32_t get_unused_page_num(Pager* pager) {
     return pager->num_pages;
-    // TODO: recycle free pages
+    // TODO: recycle free pages, LRU algo, page pool
 }
 // get one page by page_num
 void* get_page(Pager* pager, uint32_t page_num) {
@@ -287,7 +287,7 @@ NodeType get_node_type(void* node) {
 }
 void set_node_type(void* node, NodeType type) {
     uint8_t value = type;
-    *((uint8_t*)(node + NODE_TYPE_OFFSET)) = value;
+    *((uint8_t*)(node + NODE_TYPE_OFFSET * 8)) = value;
 }
 void set_node_root(void* node, bool is_root) {
     uint8_t value = is_root;
@@ -307,7 +307,7 @@ uint32_t get_node_max_key(void* node) {
     }
 }
 // return parent pointer of a node
-uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET; }
+uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET * 8; }
 
 /*
  *internal nodes utility functions
@@ -585,10 +585,12 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
     void* new_node = get_page(cursor->table->pager, new_page_num);
     initialize_leaf_node(new_node);
     *node_parent(new_node) = *node_parent(old_node);
+
     *leaf_node_next_leaf(new_node) = *leaf_node_next_leaf(old_node);
     *leaf_node_next_leaf(old_node) = new_page_num;
 
     for (int32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--) {
+        // copy data to left and right leaf nodes
         void* destination_node;
         if (i >= LEAF_NODE_LEFT_SPLIT_COUNT) {
             destination_node = new_node;
@@ -604,10 +606,10 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
             *leaf_node_key(destination_node, index_within_node) = key;
         } else if (i > cursor->cell_num) {
             memcpy(destination, leaf_node_cell(old_node, i - 1),
-                   LEAF_NODE_CELL_SIZE);
+                   LEAF_NODE_CELL_SIZE * 8);
         } else {
             memcpy(destination, leaf_node_cell(old_node, i),
-                   LEAF_NODE_CELL_SIZE);
+                   LEAF_NODE_CELL_SIZE * 8);
         }
     }
 
