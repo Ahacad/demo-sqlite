@@ -309,7 +309,7 @@ uint32_t get_node_max_key(void* node) {
     }
 }
 // return parent pointer of a node
-uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET * 8; }
+uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET; }
 
 /*
  *internal nodes utility functions
@@ -317,8 +317,8 @@ uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET * 8; }
 
 // return pointer to a cell in internal node
 uint32_t* internal_node_cell(void* node, uint32_t cell_num) {
-    return node +
-           (INTERNAL_NODE_HEADER_SIZE + cell_num * INTERNAL_NODE_CELL_SIZE) * 8;
+    return node + INTERNAL_NODE_HEADER_SIZE +
+           cell_num * INTERNAL_NODE_CELL_SIZE;
 }
 // get key of one child by its cell number (key_num)
 uint32_t* internal_node_key(void* node, uint32_t key_num) {
@@ -327,11 +327,11 @@ uint32_t* internal_node_key(void* node, uint32_t key_num) {
 }
 // return pointer to right child in internal node
 uint32_t* internal_node_right_child(void* node) {
-    return node + INTERNAL_NODE_RIGHT_CHILD_OFFSET * 8;
+    return node + INTERNAL_NODE_RIGHT_CHILD_OFFSET;
 }
 // get pointer to number of keys for internal node
 uint32_t* internal_node_num_keys(void* node) {
-    return node + INTERNAL_NODE_NUM_KEYS_OFFSET * 8;
+    return node + INTERNAL_NODE_NUM_KEYS_OFFSET;
 }
 // get child from an internal node by child number
 uint32_t* internal_node_child(void* node, uint32_t child_num) {
@@ -465,7 +465,7 @@ struct {
 
 /* B-Tree operations */
 
-// return position of a given key
+// return position of a given key, result will be on leaf node
 // if not present return the position where it should be inserted
 Cursor* table_find(uint32_t key) {
     uint32_t root_page_num = table.root_page_num;
@@ -513,7 +513,6 @@ void cursor_advance(Cursor* cursor) {
 /* the key to select is stored in `statement.row.b` */
 void b_tree_search() {
     /* print selected rows */
-    printf("[INFO] select: %s\n", statement.row.b);
     Cursor* cursor = table_start();
     Row row;
     while (!(cursor->is_end_of_table)) {
@@ -622,10 +621,10 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
             *leaf_node_key(destination_node, index_within_node) = key;
         } else if (i > cursor->cell_num) {
             memcpy(destination, leaf_node_cell(old_node, i - 1),
-                   LEAF_NODE_CELL_SIZE * 8);
+                   LEAF_NODE_CELL_SIZE);
         } else {
             memcpy(destination, leaf_node_cell(old_node, i),
-                   LEAF_NODE_CELL_SIZE * 8);
+                   LEAF_NODE_CELL_SIZE);
         }
     }
 
@@ -694,12 +693,10 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     /*printf("LEAF NODE KEY SIZE: %d\n", LEAF_NODE_KEY_SIZE);*/
     /*printf("DIFF: %ld\n", leaf_node_value(node, cursor->cell_num) -*/
     /*leaf_node_cell(node, cursor->cell_num));*/
-    printf("Serialized\n");
 }
 /* the row to insert is stored in `statement.row` */
 void b_tree_insert() {
     /* insert a row */
-    printf("[INFO] insert: ");
     print_row(&statement.row);
 
     Row* row_to_insert = &statement.row;
