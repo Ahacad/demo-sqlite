@@ -398,7 +398,7 @@ uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
 }
 // return value of a cell (a, b)
 uint32_t* leaf_node_value(void* node, uint32_t cell_num) {
-    return leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE / 4;
+    return (void*)leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
 }
 void initialize_internal_node(void* node) {
     set_node_type(node, NODE_INTERNAL);
