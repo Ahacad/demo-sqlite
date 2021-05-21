@@ -719,8 +719,6 @@ void b_tree_traverse() {
         cursor_advance(cursor);
     }
     free(cursor);
-
-    printf("[INFO] traverse\n");
 }
 
 /* logic starts */

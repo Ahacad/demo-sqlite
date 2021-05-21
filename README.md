@@ -25,3 +25,7 @@ internal node:
 |             |            |
 | child       | 4          |
 | key         | 4          |
+
+### Todos:
+
+- [ ] delete all info
