@@ -101,13 +101,13 @@ void* get_page(uint32_t page_num);
 void pager_open(const char* filename);
 void print_row(Row* row);
 Cursor* table_find(uint32_t key);
+Cursor* table_start();
 NodeType get_node_type(void* node);
 void serialize_row(Row* source, leaf_node_body* destination);
-void deserialize_row(void* source, Row* destination);
+void deserialize_row(leaf_node_body* source, Row* destination);
 
 // database utility functions
 uint32_t get_unused_page_num(Pager* pager);
-Cursor* table_start();
 // node common
 void set_node_type(void* node, NodeType type);
 void set_node_root(void* node, bool is_root);
@@ -306,11 +306,11 @@ void serialize_row(Row* source, leaf_node_body* destination) {
     strcpy(destination->b, source->b);
 }
 // copy data from database to destination
-void deserialize_row(void* source, Row* destination) {
-    memcpy(&(destination->a), source + A_OFFSET, A_SIZE);
-    memcpy(&(destination->b), source + B_OFFSET, B_SIZE);
-    /*printf("deserializing b, dest & source: \n");*/
-    /*print_bytes(&(destination->b), B_SIZE);*/
+void deserialize_row(leaf_node_body* source, Row* destination) {
+    destination->a = source->a;
+    strcpy(destination->b, source->b);
+    /*memcpy(&(destination->a), source + A_OFFSET, A_SIZE);*/
+    /*memcpy(&(destination->b), source + B_OFFSET, B_SIZE);*/
 }
 
 /*
@@ -570,37 +570,37 @@ Cursor* table_find(uint32_t key) {
     }
 }
 // return table start position
-/*Cursor* table_start() {*/
-/*Cursor* cursor = table_find(0);*/
-/*void* node = get_page(table.pager, cursor->page_num);*/
-/*uint32_t num_cells = *leaf_node_num_cells(node);*/
-/*cursor->is_end_of_table = (num_cells == 0);*/
-/*return cursor;*/
-/*}*/
-/*// get leaf node value of current cursor's node*/
-/*void* cursor_value(Cursor* cursor) {*/
-/*uint32_t page_num = cursor->page_num;*/
-/*void* page = get_page(cursor->table->pager, page_num);*/
-/*return leaf_node_value(page, cursor->cell_num);*/
-/*}*/
-/*// advance cursor by 1*/
-/*void cursor_advance(Cursor* cursor) {*/
-/*uint32_t page_num = cursor->page_num;*/
-/*void* node = get_page(cursor->table->pager, page_num);*/
+Cursor* table_start() {
+    Cursor* cursor = table_find(0);
+    leaf_node* node = get_page(cursor->page_num);
+    uint32_t num_cells = node->num_cells;
+    cursor->is_end_of_table = (num_cells == 0);
+    return cursor;
+}
+// get leaf node value of current cursor's node
+leaf_node_body* cursor_value(Cursor* cursor) {
+    uint32_t page_num = cursor->page_num;
+    leaf_node* page = get_page(page_num);
+    return &page->values[cursor->cell_num];
+}
+// advance cursor by 1
+void cursor_advance(Cursor* cursor) {
+    uint32_t page_num = cursor->page_num;
+    leaf_node* node = get_page(page_num);
 
-/*cursor->cell_num += 1;*/
-/*if (cursor->cell_num >= (*leaf_node_num_cells(node))) {*/
-/*// advance into next leaf node*/
-/*uint32_t next_page_num = *leaf_node_next_leaf(node);*/
-/*if (next_page_num == 0) {*/
-/*// already last node*/
-/*cursor->is_end_of_table = true;*/
-/*} else {*/
-/*cursor->page_num = next_page_num;*/
-/*cursor->cell_num = 0;*/
-/*}*/
-/*}*/
-/*}*/
+    cursor->cell_num += 1;
+    if (cursor->cell_num >= (node->num_cells)) {
+        // advance into next leaf node
+        uint32_t next_page_num = node->next_leaf;
+        if (next_page_num == 0) {
+            // already last node
+            cursor->is_end_of_table = true;
+        } else {
+            cursor->page_num = next_page_num;
+            cursor->cell_num = 0;
+        }
+    }
+}
 
 /* the key to select is stored in `statement.row.b` */
 /*
@@ -800,19 +800,16 @@ void b_tree_insert() {
  *}
  */
 
-/*
- *void b_tree_traverse() {
- *    Cursor* cursor = table_start();
- *    Row row;
- *    while (!(cursor->is_end_of_table)) {
- *        deserialize_row(cursor_value(cursor), &row);
- *        print_row(&row);
- *        cursor_advance(cursor);
- *        [ > printf("b: %s\n", statement.row.b); < ]
- *    }
- *    free(cursor);
- *}
- */
+void b_tree_traverse() {
+    Cursor* cursor = table_start();
+    Row row;
+    while (!(cursor->is_end_of_table)) {
+        deserialize_row(cursor_value(cursor), &row);
+        print_row(&row);
+        cursor_advance(cursor);
+    }
+    free(cursor);
+}
 
 /* logic starts */
 
@@ -952,7 +949,7 @@ PrepareResult prepare_statement() {
 ExecuteResult execute_select() {
     printf("\n");
     if (statement.flag == 0) {
-        /*b_tree_traverse();*/
+        b_tree_traverse();
     } else {
         /*b_tree_search();*/
     }
