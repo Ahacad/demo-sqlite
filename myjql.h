@@ -82,3 +82,5 @@ void deserialize_row(leaf_node_body* source, Row* destination);
 uint32_t get_unused_page_num();
 void initialize_leaf_node(leaf_node* node);
 void initialize_internal_node(internal_node* node);
+void internal_node_split(uint32_t page_num);
+
