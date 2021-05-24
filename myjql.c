@@ -334,7 +334,7 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
         parent->rightest_child = child_page_num;
         parent->body[original_num_keys].key = get_node_max_key(right_child);
     } else {
-        for (uint32_t i = original_num_keys; i > index; i--) {
+        for (int i = original_num_keys; i > index; i--) {
             parent->body[i] = parent->body[i - 1];
         }
         parent->body[index].child = child_page_num;
@@ -466,7 +466,6 @@ void open_file(const char* filename) { /* open file */
     if (pager.num_pages == 0) {
         // new table
         leaf_node* root_node = get_page(0);
-        printf("GOT\n");
         initialize_leaf_node(root_node);
 
         root_node->is_root = true;
@@ -637,10 +636,12 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
     old_node->next_leaf = new_page_num;
 
     uint32_t old_max_key = old_node->values[old_node->num_cells - 1].a;
+    printf("HELLO\n");
 
     // copy data from left to right and insert the new data
-    for (uint32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--) {
+    for (int32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--) {
         leaf_node* destination_node;
+        printf("HELLO %d\n", i);
         if (i >= LEAF_NODE_LEFT_SPLIT_COUNT) {
             destination_node = new_node;
         } else {
@@ -659,6 +660,7 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
     }
     old_node->num_cells = LEAF_NODE_LEFT_SPLIT_COUNT;
     new_node->num_cells = LEAF_NODE_RIGHT_SPLIT_COUNT;
+    printf("HELLO\n");
 
     // old node on the left, new node on the right
 
@@ -695,7 +697,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     }
     if (cursor->cell_num < num_cells) {
         // in the middle
-        for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
+        for (int i = num_cells; i > cursor->cell_num; i--) {
             node->values[i] = node->values[i - 1];
         }
     }
