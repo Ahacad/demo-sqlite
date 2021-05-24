@@ -56,7 +56,6 @@ typedef struct {
     NodeType node_type;
     bool is_root;
     uint32_t parent;
-    //
     uint32_t num_keys;
     internal_node_body body[500];
     uint32_t rightest_child;
@@ -76,3 +75,4 @@ void serialize_row(Row* source, leaf_node_body* destination);
 void deserialize_row(leaf_node_body* source, Row* destination);
 uint32_t get_unused_page_num();
 void initialize_leaf_node(leaf_node* node);
+void initialize_internal_node(internal_node* node);
