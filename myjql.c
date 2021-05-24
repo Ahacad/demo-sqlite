@@ -550,16 +550,21 @@ void cursor_advance(Cursor* cursor) {
 // the key to select is stored in `statement.row.b`
 void b_tree_search() {
     /* print selected rows */
+    int cnt = 0;
     Cursor* cursor = table_start();
     Row row;
     while (!(cursor->is_end_of_table)) {
         if (memcmp(cursor_value(cursor)->b, statement.row.b, B_SIZE) == 0) {
+            cnt++;
             deserialize_row(cursor_value(cursor), &row);
             print_row(&row);
         }
         cursor_advance(cursor);
     }
     free(cursor);
+    if (cnt == 0) {
+        printf("(Empty)\n");
+    }
 }
 
 // return index of the child which should contain the key (lower_bound)
@@ -636,12 +641,10 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
     old_node->next_leaf = new_page_num;
 
     uint32_t old_max_key = old_node->values[old_node->num_cells - 1].a;
-    printf("HELLO\n");
 
     // copy data from left to right and insert the new data
     for (int32_t i = LEAF_NODE_MAX_CELLS; i >= 0; i--) {
         leaf_node* destination_node;
-        printf("HELLO %d\n", i);
         if (i >= LEAF_NODE_LEFT_SPLIT_COUNT) {
             destination_node = new_node;
         } else {
@@ -660,7 +663,6 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
     }
     old_node->num_cells = LEAF_NODE_LEFT_SPLIT_COUNT;
     new_node->num_cells = LEAF_NODE_RIGHT_SPLIT_COUNT;
-    printf("HELLO\n");
 
     // old node on the left, new node on the right
 
@@ -706,7 +708,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
 }
 void b_tree_insert() {
     /* insert a row */
-    print_row(&statement.row);
+    /*print_row(&statement.row);*/
 
     Row* row_to_insert = &statement.row;
     uint32_t key_to_insert = row_to_insert->a;
@@ -754,12 +756,17 @@ void b_tree_insert() {
 void b_tree_traverse() {
     Cursor* cursor = table_start();
     Row row;
+    int cnt = 0;
     while (!(cursor->is_end_of_table)) {
+        cnt++;
         deserialize_row(cursor_value(cursor), &row);
         print_row(&row);
         cursor_advance(cursor);
     }
     free(cursor);
+    if (cnt == 0) {
+        printf("(Empty)\n");
+    }
 }
 
 /* logic starts */
