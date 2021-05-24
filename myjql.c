@@ -602,21 +602,20 @@ void cursor_advance(Cursor* cursor) {
     }
 }
 
-/* the key to select is stored in `statement.row.b` */
-/*
- *void b_tree_search() {
- *    [> print selected rows <]
- *    Cursor* cursor = table_start();
- *    Row row;
- *    while (!(cursor->is_end_of_table)) {
- *        if (memcmp(cursor_value(cursor) + B_OFFSET, statement.row.b, B_SIZE)
- *== 0) { deserialize_row(cursor_value(cursor), &row); print_row(&row);
- *        }
- *        cursor_advance(cursor);
- *    }
- *    free(cursor);
- *}
- */
+// the key to select is stored in `statement.row.b`
+void b_tree_search() {
+    /* print selected rows */
+    Cursor* cursor = table_start();
+    Row row;
+    while (!(cursor->is_end_of_table)) {
+        if (memcmp(cursor_value(cursor)->b, statement.row.b, B_SIZE) == 0) {
+            deserialize_row(cursor_value(cursor), &row);
+            print_row(&row);
+        }
+        cursor_advance(cursor);
+    }
+    free(cursor);
+}
 
 // return index of the child which should contain the key (lower_bound)
 uint32_t internal_node_find_child(internal_node* node, uint32_t key) {
@@ -951,7 +950,7 @@ ExecuteResult execute_select() {
     if (statement.flag == 0) {
         b_tree_traverse();
     } else {
-        /*b_tree_search();*/
+        b_tree_search();
     }
     return EXECUTE_SUCCESS;
 }
