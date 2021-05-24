@@ -7,9 +7,15 @@
 const uint32_t PAGE_SIZE = 4096;
 
 #define LEAF_NODE_MAX_CELLS 250
+#define INTERNAL_NODE_MAX_CELLS 500
 const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
 const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT =
     (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
+// FIXME:
+const uint32_t INTERNAL_NODE_LEFT_SPLIT_SIZE =
+    (INTERNAL_NODE_MAX_CELLS + 1) / 2;
+const uint32_t INTERNAL_NODE_RIGHT_SPLIT_SIZE =
+    (INTERNAL_NODE_MAX_CELLS + 1) - INTERNAL_NODE_LEFT_SPLIT_SIZE - 1;
 
 typedef struct {
     int file_descriptor;
@@ -57,7 +63,7 @@ typedef struct {
     bool is_root;
     uint32_t parent;
     uint32_t num_keys;
-    internal_node_body body[500];
+    internal_node_body body[INTERNAL_NODE_MAX_CELLS];
     uint32_t rightest_child;
 } internal_node;
 
