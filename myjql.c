@@ -62,6 +62,11 @@ Table table;
 
 typedef enum { NODE_INTERNAL, NODE_LEAF } NodeType;
 
+#define LEAF_NODE_MAX_CELLS 250
+const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
+const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT =
+    (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
+
 typedef struct {
     uint32_t a;
     char b[COLUMN_B_SIZE + 1];
@@ -73,7 +78,7 @@ typedef struct {
     //
     uint32_t num_cells;
     uint32_t next_leaf;
-    leaf_node_body values[250];
+    leaf_node_body values[LEAF_NODE_MAX_CELLS];
 } leaf_node;
 
 typedef struct {
@@ -181,12 +186,10 @@ const uint32_t LEAF_NODE_VALUE_OFFSET =
     LEAF_NODE_KEY_OFFSET + LEAF_NODE_KEY_SIZE;
 const uint32_t LEAF_NODE_CELL_SIZE = LEAF_NODE_KEY_SIZE + LEAF_NODE_VALUE_SIZE;
 const uint32_t LEAF_NODE_SPACE_FOR_CELLS = PAGE_SIZE - LEAF_NODE_HEADER_SIZE;
-const uint32_t LEAF_NODE_MAX_CELLS =
-    LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;
+
+/*const uint32_t LEAF_NODE_MAX_CELLS =*/
+/*LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE;*/
 // Right and left node numbers AFTER splitting
-const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
-const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT =
-    (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
 
 /* shell IO */
 
@@ -737,19 +740,17 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     uint32_t num_cells = node->num_cells;
     if (num_cells >= LEAF_NODE_MAX_CELLS) {
         // node is full
-        // TODO
+        // TODO: split
         /*leaf_node_split_and_insert(cursor, key, value);*/
         return;
     }
     if (cursor->cell_num < num_cells) {
         // in the middle
         for (uint32_t i = num_cells; i > cursor->cell_num; i--) {
-            memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i - 1),
-                   LEAF_NODE_CELL_SIZE);
+            node->values[i] = node->values[i - 1];
         }
     }
     node->num_cells += 1;
-    node->values[cursor->cell_num].a = key;
     serialize_row(value, &node->values[cursor->cell_num]);
 }
 void b_tree_insert() {
