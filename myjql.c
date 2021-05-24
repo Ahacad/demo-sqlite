@@ -41,7 +41,6 @@ Table table;
 /*
  *functions declartions
  */
-Cursor* leaf_node_find(uint32_t page_num, uint32_t key);
 Cursor* internal_node_find(uint32_t page_num, uint32_t key);
 uint32_t internal_node_find_child(internal_node* node, uint32_t key);
 
@@ -534,8 +533,10 @@ void cursor_advance(Cursor* cursor) {
     leaf_node* node = get_page(page_num);
 
     cursor->cell_num += 1;
+    /*printf("this cursor b is: %s\n", cursor_value(cursor)->b);*/
     if (cursor->cell_num >= (node->num_cells)) {
         // advance into next leaf node
+        /*printf("going to next leaf node\n");*/
         uint32_t next_page_num = node->next_leaf;
         if (next_page_num == 0) {
             // already last node
@@ -615,7 +616,7 @@ Cursor* leaf_node_find(uint32_t page_num, uint32_t key) {
     uint32_t left = 0, right = num_cells, mid, key_at_index;
     while (left != right) {
         mid = left + ((right - left) >> 2);
-        key_at_index = *leaf_node_key(node, mid);
+        key_at_index = node->values[mid].a;
         if (key == key_at_index) {
             cursor->cell_num = mid;
             return cursor;
@@ -714,44 +715,60 @@ void b_tree_insert() {
     uint32_t key_to_insert = row_to_insert->a;
     Cursor* cursor = table_find(key_to_insert);
 
-    void* node = get_page(cursor->page_num);
-    uint32_t num_cells = *leaf_node_num_cells(node);
+    leaf_node* node = get_page(cursor->page_num);
+    uint32_t num_cells = node->num_cells;
 
     if (cursor->cell_num < num_cells) {
         // FIXME: handle duplicate key
     }
 
+    printf("cell_num: %d\n", cursor->cell_num);
     leaf_node_insert(cursor, row_to_insert->a, row_to_insert);
     free(cursor);
 }
 
-/*void leaf_node_delete(Cursor* cursor) {*/
-/*uint32_t page_num = cursor->page_num;*/
-/*void* node = get_page(cursor->table->pager, page_num);*/
-/*for (uint32_t i = cursor->cell_num; i < *leaf_node_num_cells(node) - 1;*/
-/*i--) {*/
-/*memcpy(leaf_node_cell(node, i), leaf_node_cell(node, i + 1),*/
-/*LEAF_NODE_CELL_SIZE);*/
-/*}*/
-/**leaf_node_num_cells(node) -= 1;*/
+void leaf_node_delete(Cursor* cursor) {
+    uint32_t page_num = cursor->page_num;
+    leaf_node* node = get_page(page_num);
+    for (int i = cursor->cell_num; i < node->num_cells - 1; i++) {
+        node->values[i] = node->values[i + 1];
+        node->values[i + 1].a = 0;
+        printf("HELO\n");
+        memset(node->values[i + 1].b, 0, sizeof(node->values[i + 1].b));
+        printf("HELO\n");
+    }
+    node->num_cells -= 1;
 
-/*// TODO: handle after deletion*/
-/*}*/
+    // TODO: handle after deletion
+}
 
 /* the key to delete is stored in `statement.row.b` */
-/*
- *void b_tree_delete() {
- *    [ > delete row(s) < ] Cursor* cursor = table_start();
- *    Row row;
- *    while (!(cursor->is_end_of_table)) {
- *        if (memcmp(cursor_value(cursor) + B_OFFSET, statement.row.b, B_SIZE)
- *== 0) { leaf_node_delete(cursor);
- *        }
- *        cursor_advance(cursor);
- *    }
- *    free(cursor);
- *}
- */
+void b_tree_delete() {
+    Cursor* cursor = table_start();
+    Row row;
+    while (!(cursor->is_end_of_table)) {
+        if (memcmp(cursor_value(cursor)->b, statement.row.b, B_SIZE) == 0) {
+            leaf_node_delete(cursor);
+            uint32_t page_num = cursor->page_num;
+            leaf_node* node = get_page(page_num);
+            if (cursor->cell_num >= (node->num_cells)) {
+                // advance into next leaf node
+                /*printf("going to next leaf node\n");*/
+                uint32_t next_page_num = node->next_leaf;
+                if (next_page_num == 0) {
+                    // already last node
+                    cursor->is_end_of_table = true;
+                } else {
+                    cursor->page_num = next_page_num;
+                    cursor->cell_num = 0;
+                }
+            }
+            continue;
+        }
+        cursor_advance(cursor);
+    }
+    free(cursor);
+}
 
 void b_tree_traverse() {
     Cursor* cursor = table_start();
@@ -922,7 +939,7 @@ ExecuteResult execute_statement() {
         case STATEMENT_SELECT:
             return execute_select();
         case STATEMENT_DELETE:
-            /*b_tree_delete();*/
+            b_tree_delete();
             return EXECUTE_SUCCESS;
     }
 }
