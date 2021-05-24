@@ -3,6 +3,8 @@
 /* Test: /usr/bin/time -v ./myjql myjql.db < in.txt > out.txt */
 /* Compare: diff out.txt ans.txt */
 
+#include "myjql.h"
+
 #include <fcntl.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -25,75 +27,16 @@ void print_bytes(void* ptr, int size) {
 /*
  *table
  */
-#define COLUMN_B_SIZE 11
-#define TABLE_MAX_PAGES 500
-#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
-const uint32_t PAGE_SIZE = 4096;
 // FIXME: test whether 500 is enough
 // the table struct specified in the PJ
-typedef struct {
-    uint32_t a;
-    char b[COLUMN_B_SIZE + 1];
-} Row;
 const uint32_t A_SIZE = size_of_attribute(Row, a);
 const uint32_t B_SIZE = size_of_attribute(Row, b);
 const uint32_t A_OFFSET = 0;
 const uint32_t B_OFFSET = A_OFFSET + A_SIZE;
 const uint32_t ROW_SIZE = A_SIZE + B_SIZE;
 
-typedef struct {
-    int file_descriptor;
-    uint32_t file_length;
-    uint32_t num_pages;
-    void* pages[TABLE_MAX_PAGES];
-} Pager;
-typedef struct {
-    Pager pager;
-    uint32_t root_page_num;
-} Table;
-typedef struct {
-    Table* table;
-    uint32_t page_num;
-    uint32_t cell_num;
-    bool is_end_of_table;
-} Cursor;
 Pager pager;
 Table table;
-
-typedef enum { NODE_INTERNAL, NODE_LEAF } NodeType;
-
-#define LEAF_NODE_MAX_CELLS 250
-const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
-const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT =
-    (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
-
-typedef struct {
-    uint32_t a;
-    char b[COLUMN_B_SIZE + 1];
-} leaf_node_body;
-typedef struct {
-    NodeType node_type;
-    bool is_root;
-    uint32_t parent;
-    //
-    uint32_t num_cells;
-    uint32_t next_leaf;
-    leaf_node_body values[LEAF_NODE_MAX_CELLS];
-} leaf_node;
-
-typedef struct {
-    uint32_t child;
-    uint32_t key;
-} internal_node_body;
-typedef struct {
-    NodeType node_type;
-    bool is_root;
-    uint32_t parent;
-    //
-    uint32_t num_keys;
-    internal_node_body body[500];
-    uint32_t rightest_child;
-} internal_node;
 
 /*
  *functions declartions
@@ -110,9 +53,10 @@ Cursor* table_start();
 NodeType get_node_type(void* node);
 void serialize_row(Row* source, leaf_node_body* destination);
 void deserialize_row(leaf_node_body* source, Row* destination);
+uint32_t get_unused_page_num();
+void initialize_leaf_node(leaf_node* node);
 
 // database utility functions
-uint32_t get_unused_page_num(Pager* pager);
 // node common
 void set_node_type(void* node, NodeType type);
 void set_node_root(void* node, bool is_root);
@@ -134,7 +78,6 @@ uint32_t* leaf_node_key(void* node, uint32_t key_num);
 
 // REBORN!
 
-void initialize_leaf_node(leaf_node* node);
 /*
  *nodes
  */
@@ -227,10 +170,10 @@ InputResult read_input() {
 /*
  *database utility functions
  */
-/*uint32_t get_unused_page_num(Pager* pager) {*/
-/*return pager->num_pages;*/
-/*// TODO: recycle free pages, LRU algo, page pool*/
-/*}*/
+uint32_t get_unused_page_num() {
+    return pager.num_pages;
+    // TODO: recycle free pages, LRU algo, page pool
+}
 // get one page by page_num
 void* get_page(uint32_t page_num) {
     if (page_num > TABLE_MAX_PAGES) {
@@ -685,6 +628,11 @@ Cursor* leaf_node_find(uint32_t page_num, uint32_t key) {
 // node is full, need spliting
 /*
  *void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
+ *    leaf_node* old_node = get_page(cursor->page_num);
+ *    uint32_t new_page_num = get_unused_page_num();
+ *    leaf_node* new_node = get_page(new_page_num);
+ *    initialize_leaf_node(new_node);
+ *
  *    // old node on the left, new node on the right
  *    void* old_node = get_page(cursor->table->pager, cursor->page_num);
  *    uint32_t old_max = get_node_max_key(old_node);
