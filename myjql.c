@@ -471,7 +471,6 @@ void open_file(const char* filename) { /* open file */
 
         root_node->is_root = true;
     }
-    printf("OPENNED\n");
 }
 
 void exit_nicely(int code) {
