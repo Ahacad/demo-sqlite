@@ -462,13 +462,32 @@ void open_file(const char* filename) { /* open file */
     table.pager = pager;
     table.root_page_num = 0;
 
-    if (pager.num_pages == 0) {
-        // new table
-        leaf_node* root_node = get_page(0);
-        initialize_leaf_node(root_node);
+    // new table
+    internal_node* root_node = get_page(0);
+    initialize_internal_node(root_node);
 
-        root_node->is_root = true;
+    root_node->is_root = true;
+
+    // pre build tree
+    for (int i = 0; i <= 20; i++) {
+        uint32_t page_num = get_unused_page_num();
+        void* page = malloc(PAGE_SIZE);
+        pager.pages[page_num] = page;
+        pager.num_pages = page_num + 1;
+
+        leaf_node* node = get_page(page_num);
+        initialize_leaf_node(node);
+        node->node_type = NODE_LEAF;
+        node->next_leaf = page_num + 1;
+        node->num_cells = 0;
+
+        root_node->body[i].child = page_num;
+        root_node->body[i].key = (250 * (i + 1)) - 1;
     }
+    leaf_node* node = get_page(20);
+    node->next_leaf = 0;
+
+    root_node->num_keys = 20;
 }
 
 void exit_nicely(int code) {
@@ -514,7 +533,7 @@ Cursor* table_find(uint32_t key) {
     }
 }
 // return table start position
-Cursor* table_start() {
+inline Cursor* table_start() {
     Cursor* cursor = table_find(0);
     leaf_node* node = get_page(cursor->page_num);
     uint32_t num_cells = node->num_cells;
@@ -529,12 +548,12 @@ leaf_node_body* cursor_value(Cursor* cursor) {
 }
 // advance cursor by 1
 void cursor_advance(Cursor* cursor) {
-    uint32_t page_num = cursor->page_num;
-    leaf_node* node = get_page(page_num);
+    leaf_node* node = get_page(cursor->page_num);
 
     cursor->cell_num += 1;
     /*printf("this cursor b is: %s\n", cursor_value(cursor)->b);*/
-    if (cursor->cell_num >= (node->num_cells)) {
+    while ((!cursor->is_end_of_table) &&
+           cursor->cell_num >= (node->num_cells)) {
         // advance into next leaf node
         /*printf("going to next leaf node\n");*/
         uint32_t next_page_num = node->next_leaf;
@@ -544,12 +563,15 @@ void cursor_advance(Cursor* cursor) {
         } else {
             cursor->page_num = next_page_num;
             cursor->cell_num = 0;
+            node = get_page(cursor->page_num);
         }
     }
 }
 
 // the key to select is stored in `statement.row.b`
 void b_tree_search() {
+    /*printf("[INFO] select: %s\n", statement.row.b);*/
+
     /* print selected rows */
     int cnt = 0;
     Cursor* cursor = table_start();
@@ -570,13 +592,13 @@ void b_tree_search() {
 
 // return index of the child which should contain the key (lower_bound)
 uint32_t internal_node_find_child(internal_node* node, uint32_t key) {
-    uint32_t num_keys = node->num_keys;
+    int num_keys = node->num_keys;
 
     // binary search to find left boundary
-    uint32_t left = 0, right = num_keys, mid, key_to_right;
+    int left = 0, right = num_keys, mid, key_to_right;
     while (left < right) {
         mid = left + ((right - left) >> 2);
-        key_to_right = *internal_node_key(node, mid);
+        key_to_right = node->body[mid].key;
         if (key_to_right >= key) {
             right = mid;
         } else {
@@ -592,8 +614,8 @@ Cursor* internal_node_find(uint32_t page_num, uint32_t key) {
     internal_node* node = get_page(page_num);
 
     uint32_t child_index = internal_node_find_child(node, key);
-    uint32_t child_num = *internal_node_child(node, child_index);
-    void* child = get_page(child_num);
+    uint32_t child_num = node->body[child_index].child;
+    leaf_node* child = get_page(child_num);
     switch (get_node_type(child)) {
         case NODE_LEAF:
             return leaf_node_find(child_num, key);
@@ -695,6 +717,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     if (num_cells >= LEAF_NODE_MAX_CELLS) {
         // node is full
         // TODO: split
+        printf("SPLITTING\n");
         leaf_node_split_and_insert(cursor, key, value);
         return;
     }
@@ -709,6 +732,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
 }
 void b_tree_insert() {
     /* insert a row */
+    /*printf("[INFO] insert: ");*/
     /*print_row(&statement.row);*/
 
     Row* row_to_insert = &statement.row;
@@ -722,7 +746,7 @@ void b_tree_insert() {
         // FIXME: handle duplicate key
     }
 
-    printf("cell_num: %d\n", cursor->cell_num);
+    /*printf("cell_num: %d\n", cursor->cell_num);*/
     leaf_node_insert(cursor, row_to_insert->a, row_to_insert);
     free(cursor);
 }
@@ -733,9 +757,7 @@ void leaf_node_delete(Cursor* cursor) {
     for (int i = cursor->cell_num; i < node->num_cells - 1; i++) {
         node->values[i] = node->values[i + 1];
         node->values[i + 1].a = 0;
-        printf("HELO\n");
-        memset(node->values[i + 1].b, 0, sizeof(node->values[i + 1].b));
-        printf("HELO\n");
+        node->values[i + 1].b[0] = '\0';
     }
     node->num_cells -= 1;
 
@@ -744,33 +766,39 @@ void leaf_node_delete(Cursor* cursor) {
 
 /* the key to delete is stored in `statement.row.b` */
 void b_tree_delete() {
+    printf("[INFO] delete: %s\n", statement.row.b);
+
     Cursor* cursor = table_start();
     Row row;
+    uint32_t page_num;
+    leaf_node* node;
     while (!(cursor->is_end_of_table)) {
-        if (memcmp(cursor_value(cursor)->b, statement.row.b, B_SIZE) == 0) {
+        if (strcmp(cursor_value(cursor)->b, statement.row.b) == 0) {
             leaf_node_delete(cursor);
-            uint32_t page_num = cursor->page_num;
-            leaf_node* node = get_page(page_num);
             if (cursor->cell_num >= (node->num_cells)) {
+                printf("ADVANCING\n");
                 // advance into next leaf node
-                /*printf("going to next leaf node\n");*/
                 uint32_t next_page_num = node->next_leaf;
                 if (next_page_num == 0) {
                     // already last node
                     cursor->is_end_of_table = true;
                 } else {
                     cursor->page_num = next_page_num;
+                    node = get_page(cursor->page_num);
                     cursor->cell_num = 0;
                 }
             }
             continue;
         }
         cursor_advance(cursor);
+        node = get_page(cursor->page_num);
     }
     free(cursor);
 }
 
 void b_tree_traverse() {
+    /*printf("[INFO] traverse\n");*/
+
     Cursor* cursor = table_start();
     Row row;
     int cnt = 0;
@@ -999,6 +1027,8 @@ int main(int argc, char* argv[]) {
                        input_buffer.buffer);
                 continue;
         }
+
+        fflush(stdout);
 
         switch (execute_statement()) {
             case EXECUTE_SUCCESS:
