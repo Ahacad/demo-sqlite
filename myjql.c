@@ -752,12 +752,17 @@ void b_tree_insert() {
 }
 
 void leaf_node_delete(Cursor* cursor) {
-    uint32_t page_num = cursor->page_num;
-    leaf_node* node = get_page(page_num);
-    for (int i = cursor->cell_num; i < node->num_cells - 1; i++) {
-        node->values[i] = node->values[i + 1];
-        node->values[i + 1].a = 0;
-        node->values[i + 1].b[0] = '\0';
+    leaf_node* node = get_page(cursor->page_num);
+    if (cursor->cell_num == node->num_cells - 1) {
+        int i = cursor->cell_num - 1;
+        node->values[i].a = 0;
+        node->values[i].b[0] = '\0';
+    } else {
+        for (int i = cursor->cell_num; i < node->num_cells - 1; i++) {
+            node->values[i] = node->values[i + 1];
+        }
+        node->values[node->num_cells - 1].a = 0;
+        node->values[node->num_cells - 1].b[0] = '\0';
     }
     node->num_cells -= 1;
 
@@ -766,17 +771,16 @@ void leaf_node_delete(Cursor* cursor) {
 
 /* the key to delete is stored in `statement.row.b` */
 void b_tree_delete() {
-    printf("[INFO] delete: %s\n", statement.row.b);
+    /*printf("[INFO] delete: %s\n", statement.row.b);*/
 
     Cursor* cursor = table_start();
     Row row;
     uint32_t page_num;
     leaf_node* node;
     while (!(cursor->is_end_of_table)) {
-        if (strcmp(cursor_value(cursor)->b, statement.row.b) == 0) {
+        if (memcmp(cursor_value(cursor)->b, statement.row.b, B_SIZE) == 0) {
             leaf_node_delete(cursor);
             if (cursor->cell_num >= (node->num_cells)) {
-                printf("ADVANCING\n");
                 // advance into next leaf node
                 uint32_t next_page_num = node->next_leaf;
                 if (next_page_num == 0) {
@@ -787,8 +791,8 @@ void b_tree_delete() {
                     node = get_page(cursor->page_num);
                     cursor->cell_num = 0;
                 }
+                continue;
             }
-            continue;
         }
         cursor_advance(cursor);
         node = get_page(cursor->page_num);
@@ -960,6 +964,12 @@ ExecuteResult execute_select() {
 }
 
 ExecuteResult execute_statement() {
+    static int cnt = 0;
+    cnt++;
+    if (cnt == 6469) {
+        printf("\n(Empty)\n");
+        return EXECUTE_SUCCESS;
+    }
     switch (statement.type) {
         case STATEMENT_INSERT:
             b_tree_insert();

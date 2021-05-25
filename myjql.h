@@ -48,7 +48,6 @@ typedef struct {
     NodeType node_type;
     bool is_root;
     uint32_t parent;
-    //
     uint32_t num_cells;
     uint32_t next_leaf;
     leaf_node_body values[LEAF_NODE_MAX_CELLS];
@@ -83,4 +82,7 @@ uint32_t get_unused_page_num();
 void initialize_leaf_node(leaf_node* node);
 void initialize_internal_node(internal_node* node);
 void internal_node_split(uint32_t page_num);
+
+leaf_node_body* cursor_value(Cursor* cursor);
+void leaf_node_delete(Cursor* cursor);
 
