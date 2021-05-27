@@ -514,7 +514,7 @@ Cursor* table_find(uint32_t key) {
     }
 }
 // return table start position
-Cursor* table_start() {
+inline Cursor* table_start() {
     Cursor* cursor = table_find(0);
     leaf_node* node = get_page(cursor->page_num);
     uint32_t num_cells = node->num_cells;
@@ -550,6 +550,8 @@ void cursor_advance(Cursor* cursor) {
 
 // the key to select is stored in `statement.row.b`
 void b_tree_search() {
+    /*printf("[INFO] select: %s\n", statement.row.b);*/
+
     /* print selected rows */
     int cnt = 0;
     Cursor* cursor = table_start();
@@ -695,6 +697,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     if (num_cells >= LEAF_NODE_MAX_CELLS) {
         // node is full
         // TODO: split
+        printf("SPLITTING\n");
         leaf_node_split_and_insert(cursor, key, value);
         return;
     }
@@ -709,6 +712,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
 }
 void b_tree_insert() {
     /* insert a row */
+    /*printf("[INFO] insert: ");*/
     /*print_row(&statement.row);*/
 
     Row* row_to_insert = &statement.row;
@@ -722,7 +726,7 @@ void b_tree_insert() {
         // FIXME: handle duplicate key
     }
 
-    printf("cell_num: %d\n", cursor->cell_num);
+    /*printf("cell_num: %d\n", cursor->cell_num);*/
     leaf_node_insert(cursor, row_to_insert->a, row_to_insert);
     free(cursor);
 }
@@ -732,11 +736,9 @@ void leaf_node_delete(Cursor* cursor) {
     leaf_node* node = get_page(page_num);
     for (int i = cursor->cell_num; i < node->num_cells - 1; i++) {
         node->values[i] = node->values[i + 1];
-        node->values[i + 1].a = 0;
-        printf("HELO\n");
-        memset(node->values[i + 1].b, 0, sizeof(node->values[i + 1].b));
-        printf("HELO\n");
     }
+    node->values[node->num_cells - 1].a = 0;
+    node->values[node->num_cells - 1].b[0] = '\0';
     node->num_cells -= 1;
 
     // TODO: handle after deletion
@@ -744,40 +746,48 @@ void leaf_node_delete(Cursor* cursor) {
 
 /* the key to delete is stored in `statement.row.b` */
 void b_tree_delete() {
+    /*printf("[INFO] delete: %s\n", statement.row.b);*/
+
     Cursor* cursor = table_start();
     Row row;
+    uint32_t page_num;
+    leaf_node* node;
     while (!(cursor->is_end_of_table)) {
-        if (memcmp(cursor_value(cursor)->b, statement.row.b, B_SIZE) == 0) {
+        if (strcmp(cursor_value(cursor)->b, statement.row.b) == 0) {
             leaf_node_delete(cursor);
-            uint32_t page_num = cursor->page_num;
-            leaf_node* node = get_page(page_num);
             if (cursor->cell_num >= (node->num_cells)) {
+                /*printf("ADVANCING\n");*/
                 // advance into next leaf node
-                /*printf("going to next leaf node\n");*/
                 uint32_t next_page_num = node->next_leaf;
                 if (next_page_num == 0) {
                     // already last node
                     cursor->is_end_of_table = true;
                 } else {
                     cursor->page_num = next_page_num;
+                    node = get_page(cursor->page_num);
                     cursor->cell_num = 0;
                 }
             }
             continue;
         }
         cursor_advance(cursor);
+        node = get_page(cursor->page_num);
     }
     free(cursor);
 }
 
 void b_tree_traverse() {
+    //    printf("[INFO] traverse\n");
+
     Cursor* cursor = table_start();
     Row row;
     int cnt = 0;
     while (!(cursor->is_end_of_table)) {
         cnt++;
         deserialize_row(cursor_value(cursor), &row);
-        print_row(&row);
+        if (strlen(row.b) > 0) {
+            print_row(&row);
+        }
         cursor_advance(cursor);
     }
     free(cursor);
@@ -999,6 +1009,8 @@ int main(int argc, char* argv[]) {
                        input_buffer.buffer);
                 continue;
         }
+
+        fflush(stdout);
 
         switch (execute_statement()) {
             case EXECUTE_SUCCESS:
