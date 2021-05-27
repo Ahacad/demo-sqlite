@@ -11,11 +11,13 @@ const uint32_t PAGE_SIZE = 4096;
 const uint32_t LEAF_NODE_RIGHT_SPLIT_COUNT = (LEAF_NODE_MAX_CELLS + 1) / 2;
 const uint32_t LEAF_NODE_LEFT_SPLIT_COUNT =
     (LEAF_NODE_MAX_CELLS + 1) - LEAF_NODE_RIGHT_SPLIT_COUNT;
-// FIXME:
+// actually stored 501 children and 500 keys
+// left 250
 const uint32_t INTERNAL_NODE_LEFT_SPLIT_SIZE =
     (INTERNAL_NODE_MAX_CELLS + 1) / 2;
+// right 249
 const uint32_t INTERNAL_NODE_RIGHT_SPLIT_SIZE =
-    (INTERNAL_NODE_MAX_CELLS + 1) - INTERNAL_NODE_LEFT_SPLIT_SIZE - 1;
+    (INTERNAL_NODE_MAX_CELLS + 1) - INTERNAL_NODE_LEFT_SPLIT_SIZE - 1 - 1;
 
 typedef struct {
     int file_descriptor;
@@ -75,6 +77,7 @@ void pager_open(const char* filename);
 void print_row(Row* row);
 Cursor* table_find(uint32_t key);
 Cursor* table_start();
+uint32_t get_node_max_key(void* node);
 NodeType get_node_type(void* node);
 void serialize_row(Row* source, leaf_node_body* destination);
 void deserialize_row(leaf_node_body* source, Row* destination);
@@ -82,6 +85,7 @@ uint32_t get_unused_page_num();
 void initialize_leaf_node(leaf_node* node);
 void initialize_internal_node(internal_node* node);
 void internal_node_split(uint32_t page_num);
+void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num);
 
 leaf_node_body* cursor_value(Cursor* cursor);
 void leaf_node_delete(Cursor* cursor);
