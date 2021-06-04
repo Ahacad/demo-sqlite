@@ -155,6 +155,9 @@ uint32_t get_unused_page_num() {
     return pager.num_pages;
     // TODO: recycle free pages, LRU algo, page pool
 }
+
+void mark_written(uint32_t page_num) { pager.pages[page_num].written = true; }
+
 // get one page by page_num
 void* get_page(uint32_t page_num) {
     bool flag = false;
