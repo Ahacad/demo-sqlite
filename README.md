@@ -11,8 +11,8 @@ leaf node:
 
 | name        | size(byte) |
 | ---         | ---        |
-| node_type   | 1          |
-| is_root     | 1          |
+| node_type   | 4          |
+| is_root     | 4          |
 | parent_node | 4          |
 | num_cells   | 4          |
 | next_leaf   | 4          |
@@ -24,8 +24,8 @@ internal node:
 
 | name        | size(byte) |
 | ---         | ---        |
-| node_type   | 1          |
-| is_root     | 1          |
+| node_type   | 4          |
+| is_root     | 4          |
 | parent_node | 4          |
 | num_keys    | 4          |
 | right_child | 4          |
