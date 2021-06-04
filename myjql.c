@@ -1,5 +1,6 @@
-/* You may refer to: https://cstack.github.io/db_tutorial/ */
-/* Compile: gcc -o myjql myjql.c -O3 */
+/* You may refer to: https://cstack.github.io/db_tutorial/ */ /* Compile: gcc -o
+                                                                 myjql myjql.c
+                                                                 -O3 */
 /* Test: /usr/bin/time -v ./myjql myjql.db < in.txt > out.txt */
 /* Compare: diff out.txt ans.txt */
 
@@ -156,10 +157,16 @@ uint32_t get_unused_page_num() {
 }
 // get one page by page_num
 void* get_page(uint32_t page_num) {
+    bool flag = false;
+    uint32_t original = page_num;
+    int resid = 0;
     if (page_num > TABLE_MAX_PAGES) {
         // FIXME: handle more pages than boundary
+        flag = true;
+        resid = page_num / PAGE_MOD;
+        page_num = page_num % PAGE_MOD;
     }
-    if (pager.pages[page_num] == NULL) {
+    if (pager.pages[page_num].storage == NULL) {
         // if no cache, read from disk
         void* page = malloc(PAGE_SIZE);
         uint32_t num_pages = pager.file_length / PAGE_SIZE;
@@ -167,18 +174,49 @@ void* get_page(uint32_t page_num) {
             num_pages += 1;
         }
         if (page_num <= num_pages) {
-            lseek(pager.file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
+            lseek(pager.file_descriptor, original * PAGE_SIZE, SEEK_SET);
             ssize_t bytes_read = read(pager.file_descriptor, page, PAGE_SIZE);
             if (bytes_read == -1) {
                 // FIXME: handle reading failure
             }
         }
-        pager.pages[page_num] = page;
+        pager.pages[page_num].page_num = original;
+        pager.pages[page_num].written = false;
+        pager.pages[page_num].storage = page;
         if (page_num >= pager.num_pages) {
             pager.num_pages = page_num + 1;
         }
+        return pager.pages[page_num].storage;
+    } else {
+        if (pager.pages[page_num].page_num == original) {
+            return pager.pages[page_num].storage;
+        } else {
+            // hit another page, clean and reget
+            if (pager.pages[page_num].written) {
+                pager_flush(page_num);
+            }
+            void* page = malloc(PAGE_SIZE);
+            uint32_t num_pages = pager.file_length / PAGE_SIZE;
+            if (pager.file_length % PAGE_SIZE) {
+                num_pages += 1;
+            }
+            if (page_num <= num_pages) {
+                lseek(pager.file_descriptor, original * PAGE_SIZE, SEEK_SET);
+                ssize_t bytes_read =
+                    read(pager.file_descriptor, page, PAGE_SIZE);
+                if (bytes_read == -1) {
+                    // FIXME: handle reading failure
+                }
+            }
+            pager.pages[page_num].page_num = original;
+            pager.pages[page_num].written = false;
+            pager.pages[page_num].storage = page;
+            if (page_num >= pager.num_pages) {
+                pager.num_pages = page_num + 1;
+            }
+            return pager.pages[page_num].storage;
+        }
     }
-    return pager.pages[page_num];
 }
 void pager_open(const char* filename) {
     int fd = open(filename, O_RDWR | O_CREAT, S_IWUSR | S_IRUSR);
@@ -197,7 +235,7 @@ void pager_open(const char* filename) {
 
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
         // initialize all pages to null
-        pager.pages[i] = NULL;
+        pager.pages[i].storage = NULL;
     }
 }
 
@@ -464,7 +502,7 @@ void open_file(const char* filename) { /* open file */
     for (int i = 0; i <= 20; i++) {
         uint32_t page_num = get_unused_page_num();
         void* page = malloc(PAGE_SIZE);
-        pager.pages[page_num] = page;
+        pager.pages[page_num].storage = page;
         pager.num_pages = page_num + 1;
 
         leaf_node* node = get_page(page_num);
@@ -829,16 +867,17 @@ typedef enum {
 } PrepareResult;
 
 void pager_flush(uint32_t page_num) {
-    if (pager.pages[page_num] == NULL) {
+    if (pager.pages[page_num].storage == NULL) {
         // FIXME: handle flush null page
     }
 
-    off_t offset = lseek(pager.file_descriptor, page_num * PAGE_SIZE, SEEK_SET);
+    off_t offset = lseek(pager.file_descriptor,
+                         pager.pages[page_num].page_num * PAGE_SIZE, SEEK_SET);
     if (offset == -1) {
         // FIXME: handle error seeking
     }
     ssize_t bytes_written =
-        write(pager.file_descriptor, pager.pages[page_num], PAGE_SIZE);
+        write(pager.file_descriptor, pager.pages[page_num].storage, PAGE_SIZE);
     if (bytes_written == -1) {
         // FIXME: handle error writing
     }
@@ -846,12 +885,12 @@ void pager_flush(uint32_t page_num) {
 
 void db_close() {
     for (uint32_t i = 0; i < pager.num_pages; i++) {
-        if (pager.pages[i] == NULL) {
+        if (pager.pages[i].storage == NULL) {
             continue;
         }
         pager_flush(i);
-        free(pager.pages[i]);
-        pager.pages[i] = NULL;
+        free(pager.pages[i].storage);
+        pager.pages[i].storage = NULL;
     }
 
     int result = close(pager.file_descriptor);
@@ -861,10 +900,10 @@ void db_close() {
 
     // check if there is any dirty page unhandled above
     for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-        void* page = pager.pages[i];
+        void* page = pager.pages[i].storage;
         if (page) {
             free(page);
-            pager.pages[i] = NULL;
+            pager.pages[i].storage = NULL;
         }
     }
 }

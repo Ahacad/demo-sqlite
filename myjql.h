@@ -2,7 +2,8 @@
 #include <stdint.h>
 
 #define COLUMN_B_SIZE 11
-#define TABLE_MAX_PAGES 500
+#define TABLE_MAX_PAGES 1000
+#define PAGE_MOD 500
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
 const uint32_t PAGE_SIZE = 4096;
 
@@ -15,10 +16,15 @@ const uint32_t INTERNAL_NODE_LEFT_SPLIT_SIZE = 250;
 const uint32_t INTERNAL_NODE_RIGHT_SPLIT_SIZE = 250;
 
 typedef struct {
+    int page_num;
+    bool written;
+    void* storage;
+} Page;
+typedef struct {
     int file_descriptor;
     uint32_t file_length;
     uint32_t num_pages;
-    void* pages[TABLE_MAX_PAGES];
+    Page pages[TABLE_MAX_PAGES];
 } Pager;
 typedef struct {
     Pager pager;
@@ -83,3 +89,4 @@ void internal_node_split(uint32_t page_num);
 leaf_node_body* cursor_value(Cursor* cursor);
 void leaf_node_delete(Cursor* cursor);
 
+void pager_flush(uint32_t page_num);
