@@ -57,7 +57,6 @@ uint32_t get_unused_page_num();
 void set_node_type(void* node, NodeType type);
 void set_node_root(void* node, bool is_root);
 bool is_node_root(void* node);
-uint32_t get_node_max_key(void* node);
 uint32_t* node_parent(void* node);
 // internal nodes
 uint32_t* internal_node_cell(void* node, uint32_t cell_num);
@@ -70,6 +69,12 @@ uint32_t* leaf_node_num_cells(void* node);
 uint32_t* leaf_node_next_leaf(void* node);
 uint32_t* leaf_node_cell(void* node, uint32_t cell_num);
 uint32_t* leaf_node_key(void* node, uint32_t key_num);
+
+void update_internal_node_key(internal_node* node, uint32_t old_key,
+                              uint32_t new_key) {
+    uint32_t old_child_index = internal_node_find_child(node, old_key);
+    node->body[old_child_index].key = new_key;
+}
 
 // REBORN!
 
@@ -176,6 +181,7 @@ void* get_page(uint32_t page_num) {
         if (pager.file_length % PAGE_SIZE) {
             num_pages += 1;
         }
+
         if (page_num <= num_pages) {
             lseek(pager.file_descriptor, original * PAGE_SIZE, SEEK_SET);
             ssize_t bytes_read = read(pager.file_descriptor, page, PAGE_SIZE);
@@ -279,12 +285,15 @@ bool is_node_root(void* node) {
 }
 // get max key number for a node
 uint32_t get_node_max_key(void* node) {
-    switch (get_node_type(node)) {
-        case NODE_INTERNAL:
-            return *internal_node_key(node, *internal_node_num_keys(node) - 1);
-        case NODE_LEAF:
-            return *leaf_node_key(node, *leaf_node_num_cells(node) - 1);
+    NodeType type = get_node_type(node);
+    if (type == NODE_INTERNAL) {
+        internal_node* new_node = node;
+        return new_node->body[new_node->num_keys - 1].key;
+    } else if (type == NODE_LEAF) {
+        leaf_node* new_node = node;
+        return new_node->values[new_node->num_cells - 1].a;
     }
+    // FIXME: node type
 }
 // return parent pointer of a node
 uint32_t* node_parent(void* node) { return node + PARENT_POINTER_OFFSET; }
@@ -321,30 +330,60 @@ uint32_t* internal_node_child(void* node, uint32_t child_num) {
         return internal_node_cell(node, child_num);
     }
 }
-/*
- *void internal_node_split(uint32_t page_num) {
- *    internal_node* node = get_page(page_num);
- *    if (node->is_root) {
- *        // if internal node is root
- *        // initialize two nodes
- *        uint32_t new_root_page_num = get_unused_page_num();
- *        internal_node* new_root_node = get_page(new_root_page_num);
- *        initialize_internal_node(new_root_node);
- *        uint32_t new_right_page_num = get_unused_page_num();
- *        internal_node* new_right_node = get_page(new_right_page_num);
- *        initialize_internal_node(new_right_node);
- *        // set nodes meta data
- *        node->is_root = false;
- *        new_root_node->is_root = true;
- *        node->parent = new_root_page_num;
- *        new_right_node->parent = new_root_page_num;
- *        for (uint32_t i = INTERNAL_NODE_MAX_CELLS; i >= 0; i--) {
- *        }
- *
- *    } else {
- *    }
- *}
- */
+void internal_node_split(uint32_t page_num) {
+    internal_node* node = get_page(page_num);
+    if (node->is_root) {
+        // if internal node is root
+        // initialize two nodes
+        uint32_t new_root_page_num = get_unused_page_num();
+        internal_node* new_root_node = get_page(new_root_page_num);
+        initialize_internal_node(new_root_node);
+        uint32_t new_right_page_num = get_unused_page_num();
+        internal_node* new_right_node = get_page(new_right_page_num);
+        initialize_internal_node(new_right_node);
+        // set nodes meta data
+        node->is_root = false;
+        new_root_node->is_root = true;
+        new_root_node->rightest_child = new_right_page_num;
+        node->parent = new_root_page_num;
+        new_right_node->parent = new_root_page_num;
+
+        // 251 -- 499
+        for (uint32_t i = INTERNAL_NODE_MAX_CELLS - 1;
+             i > INTERNAL_NODE_LEFT_SPLIT_SIZE; i--) {
+            new_right_node->body[i % INTERNAL_NODE_LEFT_SPLIT_SIZE + 1] =
+                node->body[i];
+        }
+        new_root_node->body[0].key =
+            node->body[INTERNAL_NODE_LEFT_SPLIT_SIZE].key;
+        new_root_node->num_keys = 1;
+        new_root_node->body[0].child = page_num;
+        new_right_node->rightest_child = node->rightest_child;
+
+        new_right_node->rightest_child = node->rightest_child;
+        node->rightest_child = node->body[INTERNAL_NODE_LEFT_SPLIT_SIZE].key;
+        new_right_node->num_keys = INTERNAL_NODE_RIGHT_SPLIT_SIZE;
+        node->num_keys = INTERNAL_NODE_LEFT_SPLIT_SIZE;
+    } else {
+        uint32_t old_max_key = get_node_max_key(node);
+        internal_node* parent = get_page(node->parent);
+        uint32_t new_right_page_num = get_unused_page_num();
+        internal_node* new_right_node = get_page(new_right_page_num);
+        initialize_internal_node(new_right_node);
+        new_right_node->parent = node->parent;
+        // 250 -- 499
+        for (uint32_t i = INTERNAL_NODE_MAX_CELLS - 1;
+             i > INTERNAL_NODE_LEFT_SPLIT_SIZE; i--) {
+            new_right_node->body[i % INTERNAL_NODE_LEFT_SPLIT_SIZE + 1] =
+                node->body[i];
+        }
+        node->num_keys = INTERNAL_NODE_LEFT_SPLIT_SIZE;
+        new_right_node->num_keys = INTERNAL_NODE_RIGHT_SPLIT_SIZE + 1;
+        new_right_node->rightest_child = node->rightest_child;
+        update_internal_node_key(parent, old_max_key, get_node_max_key(node));
+        internal_node_insert(node->parent, new_right_page_num);
+    }
+}
 /*
  *add new child to internal node
  *child can be leaf or internal node
@@ -363,8 +402,8 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
 
     if (child_max_key > get_node_max_key(right_child)) {
         parent->body[original_num_keys].child = right_child_page_num;
-        parent->rightest_child = child_page_num;
         parent->body[original_num_keys].key = get_node_max_key(right_child);
+        parent->rightest_child = child_page_num;
     } else {
         for (int i = original_num_keys; i > index; i--) {
             parent->body[i] = parent->body[i - 1];
@@ -466,12 +505,6 @@ uint32_t* leaf_node_key(void* node, uint32_t cell_num) {
 // return value of a cell (a, b)
 uint32_t* leaf_node_value(void* node, uint32_t cell_num) {
     return (void*)leaf_node_cell(node, cell_num) + LEAF_NODE_KEY_SIZE;
-}
-
-void update_internal_node_key(internal_node* node, uint32_t old_key,
-                              uint32_t new_key) {
-    uint32_t old_child_index = internal_node_find_child(node, old_key);
-    node->body[old_child_index].key = new_key;
 }
 
 // new leaf node
@@ -668,8 +701,8 @@ Cursor* leaf_node_find(uint32_t page_num, uint32_t key) {
     cursor->is_end_of_table = false;
 
     // binary search
-    uint32_t left = 0, right = num_cells, mid, key_at_index;
-    while (left != right) {
+    int left = 0, right = num_cells, mid, key_at_index;
+    while (left <= right) {
         mid = left + ((right - left) >> 2);
         key_at_index = node->values[mid].a;
         if (key == key_at_index) {
@@ -749,6 +782,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
     uint32_t num_cells = node->num_cells;
     if (num_cells >= LEAF_NODE_MAX_CELLS) {
         // node is full
+        /*printf("SPLITTING\n");*/
         // TODO: split
         printf("SPLITTING\n");
         leaf_node_split_and_insert(cursor, key, value);
@@ -796,7 +830,10 @@ void leaf_node_delete(Cursor* cursor) {
         }
         node->values[node->num_cells - 1].a = 0;
         node->values[node->num_cells - 1].b[0] = '\0';
+
     }
+    node->values[node->num_cells - 1].a = 0;
+    node->values[node->num_cells - 1].b[0] = '\0';
     node->num_cells -= 1;
 
     // TODO: handle after deletion
@@ -811,9 +848,10 @@ void b_tree_delete() {
     uint32_t page_num;
     leaf_node* node;
     while (!(cursor->is_end_of_table)) {
-        if (memcmp(cursor_value(cursor)->b, statement.row.b, B_SIZE) == 0) {
+        if (strcmp(cursor_value(cursor)->b, statement.row.b) == 0) {
             leaf_node_delete(cursor);
             if (cursor->cell_num >= (node->num_cells)) {
+                /*printf("ADVANCING\n");*/
                 // advance into next leaf node
                 uint32_t next_page_num = node->next_leaf;
                 if (next_page_num == 0) {
@@ -842,7 +880,9 @@ void b_tree_traverse() {
     while (!(cursor->is_end_of_table)) {
         cnt++;
         deserialize_row(cursor_value(cursor), &row);
-        print_row(&row);
+        if (strlen(row.b) > 0) {
+            print_row(&row);
+        }
         cursor_advance(cursor);
     }
     free(cursor);

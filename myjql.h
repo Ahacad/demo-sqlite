@@ -78,6 +78,7 @@ void pager_open(const char* filename);
 void print_row(Row* row);
 Cursor* table_find(uint32_t key);
 Cursor* table_start();
+uint32_t get_node_max_key(void* node);
 NodeType get_node_type(void* node);
 void serialize_row(Row* source, leaf_node_body* destination);
 void deserialize_row(leaf_node_body* source, Row* destination);
@@ -85,6 +86,10 @@ uint32_t get_unused_page_num();
 void initialize_leaf_node(leaf_node* node);
 void initialize_internal_node(internal_node* node);
 void internal_node_split(uint32_t page_num);
+void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num);
+
+leaf_node_body* cursor_value(Cursor* cursor);
+void leaf_node_delete(Cursor* cursor);
 
 leaf_node_body* cursor_value(Cursor* cursor);
 void leaf_node_delete(Cursor* cursor);
