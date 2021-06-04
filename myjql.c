@@ -364,6 +364,9 @@ void internal_node_split(uint32_t page_num) {
         node->rightest_child = node->body[INTERNAL_NODE_LEFT_SPLIT_SIZE].key;
         new_right_node->num_keys = INTERNAL_NODE_RIGHT_SPLIT_SIZE;
         node->num_keys = INTERNAL_NODE_LEFT_SPLIT_SIZE;
+
+        mark_written(new_root_page_num);
+        mark_written(new_right_page_num);
     } else {
         uint32_t old_max_key = get_node_max_key(node);
         internal_node* parent = get_page(node->parent);
@@ -382,6 +385,9 @@ void internal_node_split(uint32_t page_num) {
         new_right_node->rightest_child = node->rightest_child;
         update_internal_node_key(parent, old_max_key, get_node_max_key(node));
         internal_node_insert(node->parent, new_right_page_num);
+
+        mark_written(new_right_page_num);
+        mark_written(node->parent);
     }
 }
 /*
@@ -396,6 +402,7 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
 
     uint32_t original_num_keys = parent->num_keys;
     parent->num_keys += 1;
+    mark_written(parent_page_num);
 
     uint32_t right_child_page_num = parent->rightest_child;
     void* right_child = get_page(right_child_page_num);
@@ -412,7 +419,7 @@ void internal_node_insert(uint32_t parent_page_num, uint32_t child_page_num) {
         parent->body[index].key = child_max_key;
     }
     if (parent->num_keys >= INTERNAL_NODE_MAX_CELLS) {
-        /*internal_node_split(parent_page_num);*/
+        internal_node_split(parent_page_num);
     }
 
     // first insert node then split
@@ -752,6 +759,8 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
     }
     old_node->num_cells = LEAF_NODE_LEFT_SPLIT_COUNT;
     new_node->num_cells = LEAF_NODE_RIGHT_SPLIT_COUNT;
+    mark_written(cursor->page_num);
+    mark_written(new_page_num);
 
     // old node on the left, new node on the right
 
@@ -768,12 +777,15 @@ void leaf_node_split_and_insert(Cursor* cursor, uint32_t key, Row* value) {
         new_root->rightest_child = new_page_num;
         old_node->parent = new_root_page_num;
         new_node->parent = new_root_page_num;
+
+        mark_written(new_root_page_num);
     } else {
         uint32_t parent_page_num = old_node->parent;
         uint32_t new_max_key = old_node->values[old_node->num_cells - 1].a;
         internal_node* parent_node = get_page(parent_page_num);
         update_internal_node_key(parent_node, old_max_key, new_max_key);
         internal_node_insert(parent_page_num, new_page_num);
+        mark_written(parent_page_num);
     }
 }
 // handle inserting node
@@ -795,6 +807,7 @@ void leaf_node_insert(Cursor* cursor, uint32_t key, Row* value) {
         }
     }
     node->num_cells += 1;
+    mark_written(cursor->page_num);
     serialize_row(value, &node->values[cursor->cell_num]);
 }
 void b_tree_insert() {
@@ -830,7 +843,6 @@ void leaf_node_delete(Cursor* cursor) {
         }
         node->values[node->num_cells - 1].a = 0;
         node->values[node->num_cells - 1].b[0] = '\0';
-
     }
     node->values[node->num_cells - 1].a = 0;
     node->values[node->num_cells - 1].b[0] = '\0';

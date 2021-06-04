@@ -34,3 +34,7 @@ internal node:
 | key         | 4          |
 
 
+
+### Original bug
+
+原来的 gcc 版本过高，gcc-7.5 不支持 const 时进行运算，现在已经修复。
